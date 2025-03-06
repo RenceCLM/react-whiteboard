@@ -1,0 +1,48 @@
+#tools-div {
+    position: absolute;
+    bottom: 30px;
+    border-style: solid;
+    border-radius: 10px;
+    
+    display: flex;
+    justify-content: center;
+
+    /* to make the toolsDiv on the bottom center*/
+    /* requires the parent div to be FLEX */
+    /* margin: space outside the box.  Gives as much space available on the top to margin */
+
+    padding: 10px; /* padding: space inside the box */   
+}
+
+.toolbox-item {
+    margin: 10px;
+}
+
+#main-div {
+    display: flex;
+    height: 95vh;
+    border-style: solid;
+    background-color: rgb(226, 222, 222);
+
+    justify-content: center;
+    align-items: center;
+}
+
+.whiteboard-element {
+    border-style: solid;
+    height: 100px;
+    width: 100px;
+}
+
+#selection-box {
+    border-style: solid;
+    border-width: 2px;
+    border-color: rgb(116, 180, 240);
+    background-color: rgba(188, 223, 255, 0.267);
+    position: absolute;
+}
+
+.selected {
+    border-color: rgb(116, 180, 240);
+    background-color: rgba(188, 223, 255, 0.267);
+}
