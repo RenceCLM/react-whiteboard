@@ -32,6 +32,7 @@
     border-style: solid;
     height: 100px;
     width: 100px;
+
 }
 
 #selection-box {
@@ -45,4 +46,24 @@
 .selected {
     border-color: rgb(116, 180, 240);
     background-color: rgba(188, 223, 255, 0.267);
+}
+
+#whiteboard-canvas {
+    background-color: rgba(255, 255, 255, 0.479);
+    border-style: solid;
+    border-width: 2px;
+    /*
+    background-color: rgba(255, 255, 255, 0.479);
+    border-style: solid;
+    border-width: 2px;
+    border-color: rgb(0, 0, 0); */
+}
+
+#whiteboard-div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-style: solid;
+    border-width: 2px;
+    padding: 20px;
 }
