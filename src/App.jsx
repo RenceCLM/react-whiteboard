@@ -32,7 +32,7 @@ function App() {
   const [tool, setTool] = useState("select");
 
 
-  const [testBox, setTestBox] = useState({
+  const [eraserBox, setEraserBox] = useState({
     left: 0,
     top: 0,
     width: 0,
@@ -273,6 +273,7 @@ function App() {
       setIsDrawingArrow(true);
       setStartPoint({ x: offsetX, y: offsetY });
     } else if (tool === "eraser") {
+      setEraserBox({ left: e.clientX, top: e.clientY, width: 20, height: 20 });
       setIsErasing(true);
     }
 }
@@ -326,7 +327,7 @@ function App() {
         const left = e.clientX - width / 2;
         const top = e.clientY - height / 2;
     
-        setTestBox({ left, top, width, height });
+        setEraserBox({ left, top, width, height });
     
         // Find paths under the eraser
         const overlappingPaths = findOverlappingPaths({
@@ -372,6 +373,7 @@ function App() {
       removePaths(hoveredElements);
       setHoveredElements([]);
       setIsErasing(false);
+      setEraserBox({ left: 0, top: 0, width: 0, height: 0 });
   
       redrawCanvas(); // Finalize the canvas state after erasure
     }
@@ -436,16 +438,16 @@ function App() {
       >
       </div>
       <div
-        id="test-box"
+        id="eraser-box"
         style={{
           position: "absolute",
           border: "1px dashed red",
           backgroundColor: "rgba(255, 0, 0, 0.1)",
           borderRadius: "50%",
-          top: `${testBox.top}px`,
-          left: `${testBox.left}px`,
-          width: `${testBox.width}px`,
-          height: `${testBox.height}px`,
+          top: `${eraserBox.top}px`,
+          left: `${eraserBox.left}px`,
+          width: `${eraserBox.width}px`,
+          height: `${eraserBox.height}px`,
           pointerEvents: "none",
         }}
       ></div>
