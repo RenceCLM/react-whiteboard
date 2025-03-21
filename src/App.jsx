@@ -29,9 +29,15 @@ function App() {
   const [isErasing, setIsErasing] = useState(false);
   const [hoveredElements, setHoveredElements] = useState([]);
 
-
-
   const [tool, setTool] = useState("select");
+
+
+  const [testBox, setTestBox] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,6 +76,7 @@ function App() {
       } else {
         // Handle other shapes
         const isOverlapping = path.some(({ x, y }) => {
+
           const canvas = canvasRef.current;
           const rect = canvas.getBoundingClientRect();
   
@@ -85,8 +92,10 @@ function App() {
             screenY <= selectionBox.top + selectionBox.height
           );
         });
-  
+
+        console.log("is it overlaping?: ", isOverlapping)
         if (isOverlapping) {
+          
           selectedPaths.push(path);
         }
       }
@@ -166,8 +175,6 @@ function App() {
     );
   };
   
-  
-
   const getMousePos = (e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -182,7 +189,6 @@ function App() {
   
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-    // Apply current scale and translation
     ctx.setTransform(
       scaleRef.current,
       0,
@@ -194,6 +200,8 @@ function App() {
   
     pathsRef.current.forEach((path) => {
       if (path.type === "arrow") {
+        // If it's hovered, reduce opacity
+        ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
         drawArrow(
           path.startX,
           path.startY,
@@ -202,7 +210,6 @@ function App() {
           selectedElements.includes(path)
         );
       } else {
-        // Handle other shapes (like lines)
         ctx.beginPath();
         path.forEach(({ x, y }, index) => {
           if (index === 0) {
@@ -212,6 +219,8 @@ function App() {
           }
         });
   
+        // Change opacity if hovered
+        ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
         if (selectedElements.includes(path)) {
           ctx.strokeStyle = "blue";
           ctx.lineWidth = 3;
@@ -223,8 +232,25 @@ function App() {
         ctx.stroke();
       }
     });
+  
+    // ✅ Reset global alpha to avoid affecting other drawings
+    ctx.globalAlpha = 1.0;
   };
   
+  
+
+ /* 
+ 
+  __  __  ____  _    _  _____ ______   ________      ________ _   _ _______ _____ 
+ |  \/  |/ __ \| |  | |/ ____|  ____| |  ____\ \    / /  ____| \ | |__   __/ ____|
+ | \  / | |  | | |  | | (___ | |__    | |__   \ \  / /| |__  |  \| |  | | | (___  
+ | |\/| | |  | | |  | |\___ \|  __|   |  __|   \ \/ / |  __| | . ` |  | |  \___ \ 
+ | |  | | |__| | |__| |____) | |____  | |____   \  /  | |____| |\  |  | |  ____) |
+ |_|  |_|\____/ \____/|_____/|______| |______|   \/   |______|_| \_|  |_| |_____/ 
+                                                                                   
+ 
+ */
+
 
 
   const handleMouseDown = (e) => {
@@ -274,14 +300,10 @@ function App() {
       setSelectionBox({ left, top, width, height });
 
       const selectedPaths = findOverlappingPaths({ left, top, width, height });
-      console.log(selectionBox)
-      console.log(selectedPaths)
 
       setSelectedElements(selectedPaths);
 
       redrawCanvas();
-
-
 
     } else if (isDrawing) {
       const { offsetX, offsetY } = getMousePos(e);
@@ -291,7 +313,6 @@ function App() {
       currentPath.push({ x: offsetX, y: offsetY });
   
       // Draw line to latest point
-      console.log("Drawing")
       redrawCanvas(); // Redraw everything with new path
 
     } else if (isDrawingArrow) {
@@ -299,32 +320,30 @@ function App() {
 
       redrawCanvas();
       drawArrow(startPoint.x, startPoint.y, offsetX, offsetY, false);
-      console.log(isDrawingArrow)
-    } else if (isErasing) {
-      const { offsetX, offsetY } = getMousePos(e);
-  
-      // Create a small selection box around the mouse cursor
-      const selectionBox = {
-        left: offsetX - 5,
-        top: offsetY - 5,
-        width: 10,
-        height: 10,
-      };
-  
-      // Find paths under the cursor
-      const overlappingPaths = findOverlappingPaths(selectionBox);
-      console.log(selectionBox)
-      console.log(overlappingPaths)
-
-      setHoveredElements(overlappingPaths);
-  
-      // Set opacity to give translucent effect
-      setOpacityForPaths(overlappingPaths, 0.3);
-  
-      redrawCanvas(); // Reflect the opacity change on canvas
-
-
-    }
+    } else if (isErasing) { 
+        const width = 20;
+        const height = 20;
+        const left = e.clientX - width / 2;
+        const top = e.clientY - height / 2;
+    
+        setTestBox({ left, top, width, height });
+    
+        // Find paths under the eraser
+        const overlappingPaths = findOverlappingPaths({
+          left,
+          top,
+          width,
+          height,
+        });
+    
+        setHoveredElements((prevHoveredElements) => [
+          ...new Set([...prevHoveredElements, ...overlappingPaths]),
+        ]);        
+        console.log(hoveredElements)
+    
+        // ✅ Redraw canvas with updated opacity
+        redrawCanvas();
+      }
   }
 
   const handleMouseUp = (e) => {
@@ -360,7 +379,6 @@ function App() {
 
   const handleWheel = (e) => {
     // e.preventDefault();
-    console.log(scaleRef.current)
 
     const scaleAmount = e.deltaY < 0 ? 1.1 : 0.9;
     const newScale = scaleRef.current * scaleAmount;
@@ -383,18 +401,7 @@ function App() {
     setTool(tool);
   };
 
-  const findOverlappingElements = (selectionBox, parentElement) => {
-    if (!parentElement) return [];
-    return Array.from(parentElement.children).filter((el) => {
-      const rect = el.getBoundingClientRect();
-      return (
-        rect.right > selectionBox.left &&
-        rect.left < selectionBox.left + selectionBox.width &&
-        rect.bottom > selectionBox.top &&
-        rect.top < selectionBox.top + selectionBox.height
-      );
-    });
-  };
+
 
   return (
     <div id="main-div">
@@ -426,14 +433,29 @@ function App() {
           height: `${selectionBox.height}px`,
           pointerEvents: "none",
         }}
+      >
+      </div>
+      <div
+        id="test-box"
+        style={{
+          position: "absolute",
+          border: "1px dashed red",
+          backgroundColor: "rgba(255, 0, 0, 0.1)",
+          borderRadius: "50%",
+          top: `${testBox.top}px`,
+          left: `${testBox.left}px`,
+          width: `${testBox.width}px`,
+          height: `${testBox.height}px`,
+          pointerEvents: "none",
+        }}
       ></div>
       <div id="tools-div">
         {[
-          { displayName: "Select - V", toolName: "select", icon: "👆🏼" },
-          { displayName: "Hand - H", toolName: "hand", icon: "👋" },
-          { displayName: "Draw - D", toolName: "draw", icon: "✏️" },
+          { displayName: "Select - V", toolName: "select", icon: "👆🏼" }, // done
+          { displayName: "Hand - H", toolName: "hand", icon: "👋" }, // done
+          { displayName: "Draw - D", toolName: "draw", icon: "✏️" }, // done
           { displayName: "Eraser - E", toolName: "eraser", icon: "🧽" },
-          { displayName: "Arrow - A", toolName: "arrow", icon: "↑" },
+          { displayName: "Arrow - A", toolName: "arrow", icon: "↑" }, // done
           { displayName: "Text - T", toolName: "text", icon: "T" },
           { displayName: "Note - N", toolName: "note", icon: "📑" },
           { displayName: "Asset - U", toolName: "asset", icon: "🌠" },
