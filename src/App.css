@@ -11,7 +11,8 @@
     /* requires the parent div to be FLEX */
     /* margin: space outside the box.  Gives as much space available on the top to margin */
 
-    padding: 10px; /* padding: space inside the box */   
+    padding: 10px; /* padding: space inside the box */  
+    cursor: pointer; 
 }
 
 .toolbox-item {

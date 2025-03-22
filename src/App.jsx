@@ -1,10 +1,10 @@
+import { canvas, path } from "framer-motion/client";
 import "./App.css";
 import { useRef, useState, useEffect } from "react";
 
 function App() {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
-  const divRef = useRef(null);
 
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
@@ -46,6 +46,16 @@ function App() {
   const imagesRef = useRef([]);
   const notesRef = useRef([]);
 
+  const [isDrawingShape, setIsDrawingShape] = useState(false);
+  const [drawingBox, setDrawingBox] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  });
+  const [drawingShape, setDrawingShape] = useState(null);
+  const [currentShapeId, setCurrentShapeId] = useState(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     canvas.width = window.innerWidth * 0.8;
@@ -60,6 +70,8 @@ function App() {
 
     ctxRef.current = ctx;
   }, []);
+
+  const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   const findOverlappingPaths = (selectionBox) => {
     const selectedPaths = [];
@@ -129,11 +141,6 @@ function App() {
     selectionBox.left >= note.y && selectionBox.left <= note.y + note.height
   );
 
-  console.log(
-    selectionBox.top >= notesRef.current[0].x, 
-    selectionBox.top <= notesRef.current[0].x + notesRef.current[0].width, 
-    selectionBox.left >= notesRef.current[0].y, 
-    selectionBox.left <= notesRef.current[0].y + notesRef.current[0].height)
 
   
   return [
@@ -260,7 +267,149 @@ function App() {
   
     // ✅ Draw paths
     pathsRef.current.forEach((path) => {
-      if (path.type === "arrow") {
+      if (path.type === 'rectangle') {
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(
+          Math.min(path.x, path.x + path.width),
+          Math.min(path.y, path.y + path.height),
+          Math.abs(path.width),
+          Math.abs(path.height)
+        );
+      } else if (path.type === 'circle') {
+        const radius = Math.min(Math.abs(path.width), Math.abs(path.height)) / 2;
+        if (radius > 0) {
+          ctx.beginPath();
+          ctx.arc(
+            Math.min(path.x, path.x + path.width) + radius,
+            Math.min(path.y, path.y + path.height) + radius,
+            radius,
+            0,
+            2 * Math.PI
+          );
+          ctx.stroke();
+        }
+      } else if (path.type === 'triangle') {
+        ctx.beginPath();
+        ctx.moveTo(path.x + path.width / 2, path.y);
+        ctx.lineTo(path.x, path.y + Math.abs(path.height));
+        ctx.lineTo(path.x + Math.abs(path.width), path.y + Math.abs(path.height));
+        ctx.closePath();
+        ctx.stroke();
+      } else if (path.type === 'diamond') {
+        ctx.beginPath();
+        ctx.moveTo(path.x + path.width / 2, path.y);
+        ctx.lineTo(path.x + Math.abs(path.width), path.y + path.height / 2);
+        ctx.lineTo(path.x + path.width / 2, path.y + Math.abs(path.height));
+        ctx.lineTo(path.x, path.y + path.height / 2);
+        ctx.closePath();
+        ctx.stroke();
+      } else if (path.type === 'hexagon') {
+        const size = Math.min(Math.abs(path.width), Math.abs(path.height)) / 2;
+        if (size > 0) {
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i;
+            const x = path.x + Math.abs(path.width) / 2 + size * Math.cos(angle);
+            const y = path.y + Math.abs(path.height) / 2 + size * Math.sin(angle);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+      } else if (path.type === 'oval') {
+        if (Math.abs(path.width) > 0 && Math.abs(path.height) > 0) {
+          ctx.beginPath();
+          ctx.ellipse(
+            path.x + Math.abs(path.width) / 2,
+            path.y + Math.abs(path.height) / 2,
+            Math.abs(path.width) / 2,
+            Math.abs(path.height) / 2,
+            0,
+            0,
+            2 * Math.PI
+          );
+          ctx.stroke();
+        }
+      } else if (path.type === 'trapezoid') {
+        ctx.beginPath();
+        ctx.moveTo(path.x + Math.abs(path.width) * 0.25, path.y);
+        ctx.lineTo(path.x + Math.abs(path.width) * 0.75, path.y);
+        ctx.lineTo(path.x + Math.abs(path.width), path.y + Math.abs(path.height));
+        ctx.lineTo(path.x, path.y + Math.abs(path.height));
+        ctx.closePath();
+        ctx.stroke();
+      } else if (path.type === 'star') {
+        const cx = path.x + Math.abs(path.width) / 2;
+        const cy = path.y + Math.abs(path.height) / 2;
+        const spikes = 5;
+        const outerRadius = Math.min(Math.abs(path.width), Math.abs(path.height)) / 2;
+        const innerRadius = outerRadius / 2;
+        if (outerRadius > 0 && innerRadius > 0) {
+          ctx.beginPath();
+          for (let i = 0; i < spikes * 2; i++) {
+            const radius = i % 2 === 0 ? outerRadius : innerRadius;
+            const angle = (Math.PI / spikes) * i;
+            const x = cx + radius * Math.sin(angle);
+            const y = cy - radius * Math.cos(angle);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+      } else if (path.type === 'cloud') {
+        const x = path.x;
+        const y = path.y;
+        const w = Math.abs(path.width);
+        const h = Math.abs(path.height);
+      
+        if (w > 0 && h > 0) {
+          ctx.beginPath();
+          ctx.moveTo(x + w * 0.25, y + h * 0.75);
+          ctx.lineTo(x + w * 0.75, y + h * 0.75);
+          ctx.arc(x + w * 0.75, y + h * 0.65, w * 0.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.arc(x + w * 0.65, y + h * 0.55, w * 0.15, Math.PI * 0.2, Math.PI * 1.5);
+          ctx.arc(x + w * 0.5, y + h * 0.45, w * 0.2, Math.PI * 0.2, Math.PI * 1.8);
+          ctx.arc(x + w * 0.35, y + h * 0.55, w * 0.15, Math.PI * 0.2, Math.PI * 1.5);
+          ctx.arc(x + w * 0.25, y + h * 0.65, w * 0.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.closePath();
+          ctx.stroke();
+        }
+      } else if (path.type === 'heart') {
+        const cx = path.x + Math.abs(path.width) / 2;
+        const cy = path.y + Math.abs(path.height) / 2;
+        const topCurveHeight = Math.abs(path.height) * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + Math.abs(path.height) / 4);
+        ctx.bezierCurveTo(
+          cx + Math.abs(path.width) / 2, cy - topCurveHeight,
+          cx + Math.abs(path.width), cy + Math.abs(path.height) / 2,
+          cx, cy + Math.abs(path.height)
+        );
+        ctx.bezierCurveTo(
+          cx - Math.abs(path.width), cy + Math.abs(path.height) / 2,
+          cx - Math.abs(path.width) / 2, cy - topCurveHeight,
+          cx, cy + Math.abs(path.height) / 4
+        );
+        ctx.closePath();
+        ctx.stroke();
+      } else if (path.type === 'x-box') {
+        ctx.strokeRect(path.x, path.y, path.width, path.height);
+        ctx.beginPath();
+        ctx.moveTo(path.x, path.y);
+        ctx.lineTo(path.x + path.width, path.y + path.height);
+        ctx.moveTo(path.x + path.width, path.y);
+        ctx.lineTo(path.x, path.y + path.height);
+        ctx.stroke();
+      } else if (path.type === 'check-box') {
+        ctx.strokeRect(path.x, path.y, path.width, path.height);
+        ctx.beginPath();
+        ctx.moveTo(path.x + path.width * 0.2, path.y + path.height * 0.5);
+        ctx.lineTo(path.x + path.width * 0.4, path.y + path.height * 0.8);
+        ctx.lineTo(path.x + path.width * 0.8, path.y + path.height * 0.2);
+        ctx.stroke();
+      } else if (path.type === 'arrow') {
         ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
         drawArrow(
           path.startX,
@@ -269,7 +418,9 @@ function App() {
           path.endY,
           selectedElements.includes(path)
         );
-      } else {
+      } 
+      // ✅ Fix: Only use forEach for freeform paths
+      else if (Array.isArray(path)) {
         ctx.beginPath();
         path.forEach(({ x, y }, index) => {
           if (index === 0) {
@@ -278,7 +429,7 @@ function App() {
             ctx.lineTo(x, y);
           }
         });
-  
+    
         ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
         if (selectedElements.includes(path)) {
           ctx.strokeStyle = "blue";
@@ -287,10 +438,11 @@ function App() {
           ctx.strokeStyle = "black";
           ctx.lineWidth = 2;
         }
-  
+    
         ctx.stroke();
       }
     });
+    
   
     ctx.globalAlpha = 1.0;
 
@@ -320,7 +472,6 @@ function App() {
     if (selectedElements.includes(note)) {
       ctx.strokeStyle = "blue"; // Blue when selected
       ctx.lineWidth = 5;
-      console.log("blue selected")
     } else {
       ctx.strokeStyle = "black";
       ctx.lineWidth = 5;
@@ -383,9 +534,37 @@ function App() {
     redrawCanvas();
   }
 
+  const handleDrawingShape = (e, shape) => {
+    setIsDrawingShape(true);
+    setDrawingShape(shape);
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+  
+    const id = generateId(); // ✅ Generate unique ID
+    setCurrentShapeId(id);
+  
+    // Add new shape to `pathsRef`
+    pathsRef.current.push({
+      id,
+      type: shape,
+      x,
+      y,
+      width: 0,
+      height: 0,
+    });
+
+    console.log(      id,
+      shape,
+      x,
+      y,
+      0,0)
+  };
+
   const handleMouseDown = (e) => {
     const { offsetX, offsetY } = getMousePos(e);
     setLastMousePos({ x: e.clientX, y: e.clientY });
+    setStartPoint({ x: offsetX, y: offsetY });
 
     if (activeInput) {
       handleInputBlur(null)
@@ -459,6 +638,31 @@ function App() {
     } else if (tool === "note") {
       handleCreateNote(offsetX, offsetY)
       handleToolChange(e, "select")
+    } else if (tool === "rectangle") {
+      handleDrawingShape(e, "rectangle");
+    } else if (tool === "circle") {
+      handleDrawingShape(e, "circle");
+    } else if (tool === "triangle") {
+      handleDrawingShape(e, "triangle")
+    } else if (tool === "diamond") {
+      handleDrawingShape(e, "diamond");
+    } else if (tool === "hexagon") {
+      handleDrawingShape(e, "hexagon");
+    } else if (tool === "oval") {
+      handleDrawingShape(e, "oval");
+    } else if (tool === "trapezoid") {
+      setIsDrawingShape(true);
+      setDrawingShape("trapezoid");
+    } else if (tool === "star") {
+      handleDrawingShape(e, "star");
+    } else if (tool === "cloud") {
+      handleDrawingShape(e, "cloud");
+    } else if (tool === "heart") {
+      handleDrawingShape(e, "heart");
+    } else if (tool === "x-box") {
+      handleDrawingShape(e, "x-box");
+    } else if (tool === "check-box") {
+      handleDrawingShape(e, "check-box");
     }
   };
 
@@ -538,6 +742,34 @@ function App() {
       ctx.rect(startTextBox.x, startTextBox.y, width, height);
       ctx.strokeStyle = "gray";
       ctx.stroke();
+    } else  if (isDrawingShape) {
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+    
+      // ✅ Update existing shape dimensions
+      const shape = pathsRef.current.find((p) => p.id === currentShapeId);
+      if (shape) {
+        shape.x = Math.min(startPoint.x, x);
+        shape.y = Math.min(startPoint.y, y);
+        shape.width = Math.abs(x - startPoint.x);
+        shape.height = Math.abs(y - startPoint.y);
+    
+        redrawCanvas(); // ✅ Redraw the canvas while drawing
+      }
+  
+      // ✅ Optionally draw the dashed rectangle
+      const ctx = canvasRef.current.getContext('2d');
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = 'gray';
+      ctx.strokeRect(
+        shape.x,
+        shape.y,
+        shape.width,
+        shape.height
+      );
+      ctx.setLineDash([]);
     }
   }
 
@@ -589,8 +821,11 @@ function App() {
 
       redrawCanvas();
 
-    }
+    } else if (isDrawingShape) {
+      setIsDrawingShape(false);
+      setCurrentShapeId(null);
   };
+  }
 
   const handleWheel = (e) => {
     // e.preventDefault();
@@ -688,9 +923,6 @@ function App() {
           autoFocus
         />
       )}
-      <div ref={divRef} id="whiteboard-div">
-        <div className="whiteboard-element">Sample Element</div>
-      </div>
       <div
         id="selection-box"
         style={{
@@ -730,6 +962,18 @@ function App() {
           { displayName: "Note - N", toolName: "note", icon: "📑" },
           { displayName: "Asset - U", toolName: "asset", icon: "🌠" },
           { displayName: "Rectangle - R", toolName: "rectangle", icon: "⬜️" },
+          { displayName: "Circle - C", toolName: "circle", icon: "⚪️" },
+          { displayName: "Triangle - Y", toolName: "triangle", icon: "🔺" },
+          { displayName: "Diamond", toolName: "diamond", icon: "🔷" },
+          { displayName: "Hexagon", toolName: "hexagon", icon: "🔶" },
+          { displayName: "Oval", toolName: "oval", icon: "🔵" },
+          { displayName: "Trapezoid", toolName: "trapezoid", icon: "🔹" },
+          { displayName: "Star", toolName: "star", icon: "⭐" },
+          { displayName: "Cloud", toolName: "cloud", icon: "☁️" },
+          { displayName: "Heart", toolName: "heart", icon: "❤️" },
+          { displayName: "X-box", toolName: "x-box", icon: "❌" },
+          { displayName: "Check-box", toolName: "check-box", icon: "✅" },
+          { displayName: "More", toolName: "more", icon: "🔍" },
         ].map((item) => (
           <div key={item.toolName} className="toolbox-item" onClick={(e) => handleToolChange(e, item.toolName)}>
             {item.icon}
