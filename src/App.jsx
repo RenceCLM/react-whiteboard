@@ -31,6 +31,12 @@ function App() {
 
   const [tool, setTool] = useState("select");
 
+  const textBoxesRef = useRef([]);
+  const [isDrawingTextBox, setIsDrawingTextBox] = useState(false);
+  const [startTextBox, setStartTextBox] = useState(null);
+  const [activeInput, setActiveInput] = useState(null);
+
+
 
   const [eraserBox, setEraserBox] = useState({
     left: 0,
@@ -57,9 +63,9 @@ function App() {
   const findOverlappingPaths = (selectionBox) => {
     const selectedPaths = [];
   
+    // Check paths (lines, arrows, etc.)
     pathsRef.current.forEach((path) => {
-      if (path.type === "arrow") {
-        // Check bounding box of arrow line
+      if (path.type === 'arrow') {
         const left = Math.min(path.startX, path.endX);
         const right = Math.max(path.startX, path.endX);
         const top = Math.min(path.startY, path.endY);
@@ -74,16 +80,12 @@ function App() {
           selectedPaths.push(path);
         }
       } else {
-        // Handle other shapes
         const isOverlapping = path.some(({ x, y }) => {
-
           const canvas = canvasRef.current;
           const rect = canvas.getBoundingClientRect();
   
-          const screenX =
-            x * scaleRef.current + translationRef.current.x + rect.left;
-          const screenY =
-            y * scaleRef.current + translationRef.current.y + rect.top;
+          const screenX = x * scaleRef.current + translationRef.current.x + rect.left;
+          const screenY = y * scaleRef.current + translationRef.current.y + rect.top;
   
           return (
             screenX >= selectionBox.left &&
@@ -92,19 +94,34 @@ function App() {
             screenY <= selectionBox.top + selectionBox.height
           );
         });
-
-        console.log("is it overlaping?: ", isOverlapping)
+  
         if (isOverlapping) {
-          
           selectedPaths.push(path);
         }
+      }
+    });
+  
+    // ✅ Include textboxes in selection
+    textBoxesRef.current.forEach((box) => {
+      const left = box.x;
+      const right = box.x + box.width;
+      const top = box.y;
+      const bottom = box.y + box.height;
+  
+      if (
+        left < selectionBox.left + selectionBox.width &&
+        right > selectionBox.left &&
+        top < selectionBox.top + selectionBox.height &&
+        bottom > selectionBox.top
+      ) {
+        selectedPaths.push(box);
       }
     });
   
     return selectedPaths;
   };
   
-
+  
   const drawArrow = (x1, y1, x2, y2, isSelected) => {
     const ctx = ctxRef.current;
   
@@ -148,32 +165,17 @@ function App() {
     ctx.fill();
   };
 
-  const setOpacityForPaths = (paths, opacity) => {
-    const ctx = ctxRef.current;
-  
-    paths.forEach((path) => {
-      ctx.globalAlpha = opacity;
-      if (path.type === "arrow") {
-        drawArrow(path.startX, path.startY, path.endX, path.endY, false);
-      } else {
-        ctx.beginPath();
-        path.forEach(({ x, y }, index) => {
-          if (index === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-      }
-    });
-  
-    // Reset global alpha to avoid affecting other drawings
-    ctx.globalAlpha = 1.0;
-  };
-
-  const removePaths = (paths) => {
+  const removePaths = (elements) => {
     pathsRef.current = pathsRef.current.filter(
-      (path) => !paths.includes(path)
+      (path) => !elements.includes(path)
+    );
+  
+    // ✅ Remove textboxes
+    textBoxesRef.current = textBoxesRef.current.filter(
+      (box) => !elements.includes(box)
     );
   };
+  
   
   const getMousePos = (e) => {
     const canvas = canvasRef.current;
@@ -198,9 +200,35 @@ function App() {
       translationRef.current.y
     );
   
+    // ✅ Draw textboxes
+    textBoxesRef.current.forEach((box) => {
+      ctx.beginPath();
+      ctx.rect(box.x, box.y, box.width, box.height);
+      
+      if (hoveredElements.includes(box)) {
+        ctx.globalAlpha = 0.3; // Transparent when erasing
+      } else {
+        ctx.globalAlpha = 1.0;
+      }
+  
+      if (selectedElements.includes(box)) {
+        ctx.strokeStyle = "blue"; // Blue when selected
+        ctx.lineWidth = 2;
+      } else {
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 1;
+      }
+  
+      ctx.stroke();
+  
+      ctx.font = "16px Arial";
+      ctx.fillStyle = "black";
+      ctx.fillText(box.text, box.x + 4, box.y + 20);
+    });
+  
+    // ✅ Draw paths
     pathsRef.current.forEach((path) => {
       if (path.type === "arrow") {
-        // If it's hovered, reduce opacity
         ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
         drawArrow(
           path.startX,
@@ -219,7 +247,6 @@ function App() {
           }
         });
   
-        // Change opacity if hovered
         ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
         if (selectedElements.includes(path)) {
           ctx.strokeStyle = "blue";
@@ -233,28 +260,41 @@ function App() {
       }
     });
   
-    // ✅ Reset global alpha to avoid affecting other drawings
     ctx.globalAlpha = 1.0;
   };
   
-  
-
- /* 
- 
-  __  __  ____  _    _  _____ ______   ________      ________ _   _ _______ _____ 
- |  \/  |/ __ \| |  | |/ ____|  ____| |  ____\ \    / /  ____| \ | |__   __/ ____|
- | \  / | |  | | |  | | (___ | |__    | |__   \ \  / /| |__  |  \| |  | | | (___  
- | |\/| | |  | | |  | |\___ \|  __|   |  __|   \ \/ / |  __| | . ` |  | |  \___ \ 
- | |  | | |__| | |__| |____) | |____  | |____   \  /  | |____| |\  |  | |  ____) |
- |_|  |_|\____/ \____/|_____/|______| |______|   \/   |______|_| \_|  |_| |_____/ 
-                                                                                   
- 
- */
-
-
 
   const handleMouseDown = (e) => {
+    const { offsetX, offsetY } = getMousePos(e);
     setLastMousePos({ x: e.clientX, y: e.clientY });
+
+    if (activeInput) {
+      handleInputBlur(null)
+      setActiveInput(null)
+      return
+    }
+    const clickedTextBox = textBoxesRef.current.find(
+      (box) =>
+        offsetX >= box.x &&
+        offsetX <= box.x + box.width &&
+        offsetY >= box.y &&
+        offsetY <= box.y + box.height
+    );
+
+    if (clickedTextBox) {
+      
+      setActiveInput({...activeInput,
+        x: clickedTextBox.x,
+        y: clickedTextBox.y,
+        width: clickedTextBox.width,
+        height: clickedTextBox.height,
+        text: clickedTextBox.text,
+        id: clickedTextBox.id,
+      });
+
+      return
+    }
+
     if (tool === "hand") {
       setIsPanning(true);
     } else if (tool === "select") {
@@ -263,20 +303,21 @@ function App() {
       setSelectedElements([]);
       redrawCanvas();
     } else if (tool === "draw") {
-      const { offsetX, offsetY } = getMousePos(e);
       setIsDrawing(true);
-  
+
       // Start a new path
       pathsRef.current.push([{ x: offsetX, y: offsetY }]);
     } else if (tool === "arrow") {
-      const { offsetX, offsetY } = getMousePos(e);
       setIsDrawingArrow(true);
       setStartPoint({ x: offsetX, y: offsetY });
     } else if (tool === "eraser") {
       setEraserBox({ left: e.clientX, top: e.clientY, width: 20, height: 20 });
       setIsErasing(true);
+    } else if (tool === "text") {
+      setIsDrawingTextBox(true);
+      setStartTextBox({ x: offsetX, y: offsetY});
     }
-}
+  };
 
   const handleMouseMove = (e) => {
     if (isPanning) {
@@ -293,19 +334,18 @@ function App() {
   
       redrawCanvas()
     } else if (isSelecting) {
-      const left = Math.min(e.clientX, lastMousePos.x);
-      const top = Math.min(e.clientY, lastMousePos.y);
-      const width = Math.abs(e.clientX - lastMousePos.x);
-      const height = Math.abs(e.clientY - lastMousePos.y);
-
-      setSelectionBox({ left, top, width, height });
-
-      const selectedPaths = findOverlappingPaths({ left, top, width, height });
-
-      setSelectedElements(selectedPaths);
-
-      redrawCanvas();
-
+        const left = Math.min(e.clientX, lastMousePos.x);
+        const top = Math.min(e.clientY, lastMousePos.y);
+        const width = Math.abs(e.clientX - lastMousePos.x);
+        const height = Math.abs(e.clientY - lastMousePos.y);
+      
+        setSelectionBox({ left, top, width, height });
+      
+        const selectedElements = findOverlappingPaths({ left, top, width, height });
+        setSelectedElements(selectedElements);
+      
+        redrawCanvas();
+      
     } else if (isDrawing) {
       const { offsetX, offsetY } = getMousePos(e);
 
@@ -321,30 +361,41 @@ function App() {
 
       redrawCanvas();
       drawArrow(startPoint.x, startPoint.y, offsetX, offsetY, false);
-    } else if (isErasing) { 
-        const width = 20;
-        const height = 20;
-        const left = e.clientX - width / 2;
-        const top = e.clientY - height / 2;
+    } else if (isErasing) {
+      const width = 20;
+      const height = 20;
+      const left = e.clientX - width / 2;
+      const top = e.clientY - height / 2;
     
-        setEraserBox({ left, top, width, height });
+      setEraserBox({ left, top, width, height });
     
-        // Find paths under the eraser
-        const overlappingPaths = findOverlappingPaths({
-          left,
-          top,
-          width,
-          height,
-        });
+      // ✅ Find paths and textboxes under the eraser
+      const overlappingElements = findOverlappingPaths({
+        left,
+        top,
+        width,
+        height,
+      });
     
-        setHoveredElements((prevHoveredElements) => [
-          ...new Set([...prevHoveredElements, ...overlappingPaths]),
-        ]);        
-        console.log(hoveredElements)
+      setHoveredElements((prev) => [
+        ...new Set([...prev, ...overlappingElements]),
+      ]);
     
-        // ✅ Redraw canvas with updated opacity
-        redrawCanvas();
-      }
+      redrawCanvas();
+    } else if (isDrawingTextBox) {
+      const { offsetX, offsetY } = getMousePos(e);
+      const width = offsetX - startTextBox.x;
+      const height = 30;
+
+      redrawCanvas();
+
+      // Draw a preview of the textbox
+      const ctx = ctxRef.current;
+      ctx.beginPath();
+      ctx.rect(startTextBox.x, startTextBox.y, width, height);
+      ctx.strokeStyle = "gray";
+      ctx.stroke();
+    }
   }
 
   const handleMouseUp = (e) => {
@@ -376,6 +427,26 @@ function App() {
       setEraserBox({ left: 0, top: 0, width: 0, height: 0 });
   
       redrawCanvas(); // Finalize the canvas state after erasure
+    } else if (isDrawingTextBox) {
+      const { offsetX, offsetY } = getMousePos(e);
+      const width = offsetX - startTextBox.x;
+      const height = 30;
+
+      textBoxesRef.current.push({
+        id: Date.now(), // Add unique ID
+        x: startTextBox.x,
+        y: startTextBox.y,
+        width,
+        height,
+        text: "",
+      });
+      console.log(startTextBox.x, startTextBox.y)
+
+      setIsDrawingTextBox(false);
+      setStartTextBox(null);
+
+      redrawCanvas();
+
     }
   };
 
@@ -403,6 +474,27 @@ function App() {
     setTool(tool);
   };
 
+  const handleInputChange = (e) => {
+    setActiveInput((prev) => ({
+      ...prev,
+      text: e.target.value,
+    }));
+    console.log(activeInput)
+  };
+
+  const handleInputBlur = () => {
+    if (activeInput) {
+      // ✅ Save the input value back into the textbox
+      const updatedBoxes = textBoxesRef.current.map((box) =>
+        box.id === activeInput.id
+          ? { ...box, text: activeInput.text }
+          : box
+      );
+      textBoxesRef.current = updatedBoxes;
+      // setActiveInput(null);
+      redrawCanvas();
+    }
+  };
 
 
   return (
@@ -420,6 +512,30 @@ function App() {
         onMouseUp={handleMouseUp}
         onWheel={handleWheel}
       />
+       {activeInput && (
+        <textarea
+          value={activeInput.text}
+          onChange={handleInputChange}
+          style={{
+            position: "absolute",
+            left: `${activeInput.x * scaleRef.current + translationRef.current.x + canvasRef.current.getBoundingClientRect().left}px`,
+            top: `${activeInput.y * scaleRef.current + translationRef.current.y + canvasRef.current.getBoundingClientRect().top}px`,
+            width: `${activeInput.width * scaleRef.current}px`,
+            height: `${activeInput.height * scaleRef.current}px`,
+            fontSize: "16px",
+            padding: "4px",
+            border: "1px solid black",
+            zIndex: 10,
+            background: "transparent",
+            outline: "none",
+            resize: "none",
+            whiteSpace: "pre-wrap",
+            lineHeight: "1.2",
+            boxSizing: "border-box",
+          }}
+          autoFocus
+        />
+      )}
       <div ref={divRef} id="whiteboard-div">
         <div className="whiteboard-element">Sample Element</div>
       </div>
