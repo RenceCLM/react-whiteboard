@@ -44,6 +44,7 @@ function App() {
   });
 
   const imagesRef = useRef([]);
+  const notesRef = useRef([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -294,6 +295,19 @@ function App() {
         console.log("selected")
       }
    });
+
+   notesRef.current.forEach((note) => {
+    ctx.fillStyle = "yellow";
+    ctx.fillRect(note.x, note.y, note.width, note.height);
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(note.x, note.y, note.width, note.height);
+
+    ctx.fillStyle = "black";
+    ctx.font = "16px Arial";
+    note.text.split("\n").forEach((line, i) => {
+      ctx.fillText(line, note.x + 5, note.y + 20 + i * 20);
+    });
+  });
   };
 
   const handleAssetTool = () => {
@@ -320,7 +334,23 @@ function App() {
     };
     input.click();
   }
-  
+
+  const handleCreateNote = (x, y) => {
+    const width = 150;
+    const height = 150;
+
+    const newNote = {
+      id: Date.now(),
+      x: x - (width / 2),
+      y: y - (height / 2),
+      width: width,
+      height: height,
+      text: "",
+    };
+
+    notesRef.current.push(newNote);
+    redrawCanvas();
+  }
 
   const handleMouseDown = (e) => {
     const { offsetX, offsetY } = getMousePos(e);
@@ -339,6 +369,14 @@ function App() {
         offsetY <= box.y + box.height
     );
 
+    const clickedNote = notesRef.current.find(
+      (note) =>
+        offsetX >= note.x &&
+        offsetX <= note.x + note.width &&
+        offsetY >= note.y &&
+        offsetY <= note.y + note.height
+    );
+
     if (clickedTextBox) {
       
       setActiveInput({...activeInput,
@@ -348,6 +386,19 @@ function App() {
         height: clickedTextBox.height,
         text: clickedTextBox.text,
         id: clickedTextBox.id,
+      });
+
+      return
+    }
+
+    if (clickedNote) {
+      setActiveInput({...activeInput,
+        x: clickedNote.x,
+        y: clickedNote.y,
+        width: clickedNote.width,
+        height: clickedNote.height,
+        text: clickedNote.text,
+        id: clickedNote.id,
       });
 
       return
@@ -374,6 +425,9 @@ function App() {
     } else if (tool === "text") {
       setIsDrawingTextBox(true);
       setStartTextBox({ x: offsetX, y: offsetY});
+    } else if (tool === "note") {
+      handleCreateNote(offsetX, offsetY)
+      handleToolChange(e, "select")
     }
   };
 
@@ -555,6 +609,14 @@ function App() {
       );
       textBoxesRef.current = updatedBoxes;
       // setActiveInput(null);
+
+      const updatedNotes = notesRef.current.map((note) =>
+        note.id === activeInput.id
+          ? { ...note, text: activeInput.text }
+          : note
+      );
+      notesRef.current = updatedNotes;
+      
       redrawCanvas();
     }
   };
