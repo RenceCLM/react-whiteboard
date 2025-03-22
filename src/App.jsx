@@ -36,14 +36,14 @@ function App() {
   const [startTextBox, setStartTextBox] = useState(null);
   const [activeInput, setActiveInput] = useState(null);
 
-
-
   const [eraserBox, setEraserBox] = useState({
     left: 0,
     top: 0,
     width: 0,
     height: 0,
   });
+
+  const imagesRef = useRef([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -117,8 +117,16 @@ function App() {
         selectedPaths.push(box);
       }
     });
+
+  const selectedImages = imagesRef.current.filter(image =>
+      selectionBox.top >= image.x && selectionBox.top <= image.x + image.width &&
+      selectionBox.left >= image.y && selectionBox.left <= image.y + image.height
+  );  
   
-    return selectedPaths;
+  return [
+    ...selectedPaths,
+    ...selectedImages
+    ];
   };
   
   
@@ -174,6 +182,12 @@ function App() {
     textBoxesRef.current = textBoxesRef.current.filter(
       (box) => !elements.includes(box)
     );
+
+    imagesRef.current = imagesRef.current.filter(
+      (image) => !elements.includes(image)
+    );
+
+    redrawCanvas();
   };
   
   
@@ -261,7 +275,51 @@ function App() {
     });
   
     ctx.globalAlpha = 1.0;
+
+    imagesRef.current.forEach(image => {
+      const img = new Image();
+      img.src = image.src;
+      img.onload = () => ctx.drawImage(img, image.x, image.y, image.width, image.height);
+
+      if (hoveredElements.includes(image)) {
+        ctx.globalAlpha = 0.5; // Set opacity to 50%
+      } else {
+        ctx.globalAlpha = 1; // Reset opacity
+      }
+
+      if (selectedElements.includes(image)) {
+        ctx.strokeStyle = "blue";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(image.x, image.y, image.width, image.height);
+        console.log("selected")
+      }
+   });
   };
+
+  const handleAssetTool = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
+            imagesRef.current.push({
+                id: crypto.randomUUID(),
+                x: 100, // Default position (can modify for placement logic)
+                y: 100,
+                width: img.width / 4, // Scale down for better canvas fit
+                height: img.height / 4,
+                src: img.src,
+            });
+            redrawCanvas();
+        };
+    };
+    input.click();
+  }
   
 
   const handleMouseDown = (e) => {
@@ -343,6 +401,8 @@ function App() {
       
         const selectedElements = findOverlappingPaths({ left, top, width, height });
         setSelectedElements(selectedElements);
+
+        console.log(selectedElements)
       
         redrawCanvas();
       
@@ -471,6 +531,9 @@ function App() {
 
   const handleToolChange = (e, tool) => {
     e.preventDefault();
+    if (tool == "asset") {
+      handleAssetTool();
+    }
     setTool(tool);
   };
 
