@@ -123,10 +123,23 @@ function App() {
       selectionBox.top >= image.x && selectionBox.top <= image.x + image.width &&
       selectionBox.left >= image.y && selectionBox.left <= image.y + image.height
   );  
+
+  const selectedNotes = notesRef.current.filter(note =>
+    selectionBox.top >= note.x && selectionBox.top <= note.x + note.width &&
+    selectionBox.left >= note.y && selectionBox.left <= note.y + note.height
+  );
+
+  console.log(
+    selectionBox.top >= notesRef.current[0].x, 
+    selectionBox.top <= notesRef.current[0].x + notesRef.current[0].width, 
+    selectionBox.left >= notesRef.current[0].y, 
+    selectionBox.left <= notesRef.current[0].y + notesRef.current[0].height)
+
   
   return [
     ...selectedPaths,
-    ...selectedImages
+    ...selectedImages,
+    ...selectedNotes,
     ];
   };
   
@@ -186,6 +199,10 @@ function App() {
 
     imagesRef.current = imagesRef.current.filter(
       (image) => !elements.includes(image)
+    );
+
+    notesRef.current = notesRef.current.filter(
+      (note) => !elements.includes(note)
     );
 
     redrawCanvas();
@@ -292,21 +309,35 @@ function App() {
         ctx.strokeStyle = "blue";
         ctx.lineWidth = 3;
         ctx.strokeRect(image.x, image.y, image.width, image.height);
-        console.log("selected")
       }
    });
 
    notesRef.current.forEach((note) => {
+    if (hoveredElements.includes(note)) {
+      ctx.globalAlpha = 0.3; // Transparent when erasing
+    } 
+
+    if (selectedElements.includes(note)) {
+      ctx.strokeStyle = "blue"; // Blue when selected
+      ctx.lineWidth = 5;
+      console.log("blue selected")
+    } else {
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 5;
+    }
+
     ctx.fillStyle = "yellow";
     ctx.fillRect(note.x, note.y, note.width, note.height);
-    ctx.strokeStyle = "black";
     ctx.strokeRect(note.x, note.y, note.width, note.height);
+
+
 
     ctx.fillStyle = "black";
     ctx.font = "16px Arial";
     note.text.split("\n").forEach((line, i) => {
       ctx.fillText(line, note.x + 5, note.y + 20 + i * 20);
     });
+
   });
   };
 
@@ -455,8 +486,6 @@ function App() {
       
         const selectedElements = findOverlappingPaths({ left, top, width, height });
         setSelectedElements(selectedElements);
-
-        console.log(selectedElements)
       
         redrawCanvas();
       
@@ -554,7 +583,6 @@ function App() {
         height,
         text: "",
       });
-      console.log(startTextBox.x, startTextBox.y)
 
       setIsDrawingTextBox(false);
       setStartTextBox(null);
@@ -596,7 +624,6 @@ function App() {
       ...prev,
       text: e.target.value,
     }));
-    console.log(activeInput)
   };
 
   const handleInputBlur = () => {
@@ -616,7 +643,7 @@ function App() {
           : note
       );
       notesRef.current = updatedNotes;
-      
+
       redrawCanvas();
     }
   };
