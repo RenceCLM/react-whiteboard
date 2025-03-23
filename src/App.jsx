@@ -50,6 +50,7 @@ function App() {
   const [currentShapeId, setCurrentShapeId] = useState(null);
 
   const [isDrawingLine, setIsDrawingLine] = useState(false);
+  const [isHighlighting, setIsHighlighting] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -449,6 +450,26 @@ function App() {
           path.endY,
           selectedElements.includes(path)
         );
+      } else if (Array.isArray(path) && path[0]?.type === 'highlight') {
+        ctx.beginPath();
+        path.forEach(({ x, y }, index) => {
+          if (index === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+    
+        ctx.globalAlpha = hoveredElements.includes(path) ? 0.1 : 0.4;
+        if (selectedElements.includes(path)) {
+          ctx.strokeStyle = "blue";
+          ctx.lineWidth = 20;
+        } else {
+          ctx.strokeStyle = "yellow";
+          ctx.lineWidth = 20;
+        }
+    
+        ctx.stroke();
       } else if (Array.isArray(path)) {
         ctx.beginPath();
         path.forEach(({ x, y }, index) => {
@@ -469,9 +490,9 @@ function App() {
         }
     
         ctx.stroke();
-      }
+      } 
     });
-    
+
   
     ctx.globalAlpha = 1.0;
 
@@ -583,7 +604,6 @@ function App() {
     });
   }
 
-
   const handleMouseDown = (e) => {
     const { offsetX, offsetY } = getMousePos(e);
     setLastMousePos({ x: e.clientX, y: e.clientY });
@@ -688,7 +708,10 @@ function App() {
     } else if (tool === "line") {
       setIsDrawingLine(true)
       setStartPoint({ x: offsetX, y: offsetY });
-    } 
+    } else if (tool === "highlighter") {
+      setIsHighlighting(true);
+      pathsRef.current.push([{x: offsetX, y: offsetY, type: 'highlight'}]);
+    }
   };
 
   const handleMouseMove = (e) => {
@@ -723,7 +746,10 @@ function App() {
 
       // Add point to current path
       const currentPath = pathsRef.current[pathsRef.current.length - 1];
+      console.log(currentPath)
+
       currentPath.push({ x: offsetX, y: offsetY });
+
   
       // Draw line to latest point
       redrawCanvas(); // Redraw everything with new path
@@ -801,6 +827,14 @@ function App() {
       redrawCanvas()
       drawLine(startPoint.x, startPoint.y, offsetX, offsetY, false)
 
+    } else if (isHighlighting) {
+      const { offsetX, offsetY } = getMousePos(e)
+
+      const currentPath = pathsRef.current[pathsRef.current.length - 1];
+      console.log(currentPath)
+      currentPath.push({x: offsetX, y: offsetY, type: 'highlight'});
+
+      redrawCanvas();
     }
   }
 
@@ -808,6 +842,7 @@ function App() {
     setIsPanning(false);
     setIsSelecting(false);
     setIsDrawing(false);
+    setIsHighlighting(false);
     setSelectionBox({ left: 0, top: 0, width: 0, height: 0 });
     if (isDrawingArrow) {
       const { offsetX, offsetY } = getMousePos(e);
