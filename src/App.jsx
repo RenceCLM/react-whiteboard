@@ -1,6 +1,7 @@
 import { canvas, path } from "framer-motion/client";
 import "./App.css";
 import { useRef, useState, useEffect } from "react";
+import { time } from "framer-motion";
 
 function App() {
   const canvasRef = useRef(null);
@@ -51,6 +52,7 @@ function App() {
 
   const [isDrawingLine, setIsDrawingLine] = useState(false);
   const [isHighlighting, setIsHighlighting] = useState(false);
+  const [isLaser, setIsLaser] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -470,6 +472,22 @@ function App() {
         }
     
         ctx.stroke();
+      } else if (Array.isArray(path) && path[0]?.type === 'laser') {
+        const now = Date.now();
+        path = path.filter((point) => now - point.time <= 3000); // Keep points within 3 seconds
+    
+        ctx.beginPath();
+        path.forEach(({ x, y }, index) => {
+          if (index === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+    
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else if (Array.isArray(path)) {
         ctx.beginPath();
         path.forEach(({ x, y }, index) => {
@@ -711,6 +729,22 @@ function App() {
     } else if (tool === "highlighter") {
       setIsHighlighting(true);
       pathsRef.current.push([{x: offsetX, y: offsetY, type: 'highlight'}]);
+    } else if (tool === "laser") {
+      setIsLaser(true)
+
+      const point = {x: offsetX, y: offsetY, type: 'laser', time: Date.now()};
+
+
+      pathsRef.current.push([point]);
+
+      const laserArray = pathsRef.current[pathsRef.current.length - 1];
+
+
+        // Remove the point after 3 seconds
+      setTimeout(() => {
+        laserArray(laserArray.indexOf(point), 1);
+        redrawCanvas(); // Redraw the canvas after removing the point
+      }, 3);
     }
   };
 
@@ -793,7 +827,7 @@ function App() {
       ctx.rect(startTextBox.x, startTextBox.y, width, height);
       ctx.strokeStyle = "gray";
       ctx.stroke();
-    } else  if (isDrawingShape) {
+    } else if (isDrawingShape) {
 
       const rect = canvasRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -831,8 +865,20 @@ function App() {
       const { offsetX, offsetY } = getMousePos(e)
 
       const currentPath = pathsRef.current[pathsRef.current.length - 1];
-      console.log(currentPath)
       currentPath.push({x: offsetX, y: offsetY, type: 'highlight'});
+
+      redrawCanvas();
+    } else if (isLaser) {
+      const { offsetX, offsetY } = getMousePos(e)
+
+      const currentPath = pathsRef.current[pathsRef.current.length - 1];
+      currentPath.push({x: offsetX, y: offsetY, type: 'laser', time: Date.now()});
+
+      // Remove the point after 3 seconds
+      setTimeout(() => {
+        currentPath.splice(currentPath.indexOf(point), 1);
+        redrawCanvas(); // Redraw the canvas after removing the point
+      }, 3);
 
       redrawCanvas();
     }
@@ -843,6 +889,7 @@ function App() {
     setIsSelecting(false);
     setIsDrawing(false);
     setIsHighlighting(false);
+    setIsLaser(false);
     setSelectionBox({ left: 0, top: 0, width: 0, height: 0 });
     if (isDrawingArrow) {
       const { offsetX, offsetY } = getMousePos(e);
@@ -906,7 +953,7 @@ function App() {
     } else if (isDrawingShape) {
       setIsDrawingShape(false);
       setCurrentShapeId(null);
-  };
+    }
   }
 
   const handleWheel = (e) => {
