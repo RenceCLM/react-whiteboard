@@ -47,14 +47,9 @@ function App() {
   const notesRef = useRef([]);
 
   const [isDrawingShape, setIsDrawingShape] = useState(false);
-  const [drawingBox, setDrawingBox] = useState({
-    left: 0,
-    top: 0,
-    width: 0,
-    height: 0,
-  });
-  const [drawingShape, setDrawingShape] = useState(null);
   const [currentShapeId, setCurrentShapeId] = useState(null);
+
+  const [isDrawingLine, setIsDrawingLine] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -194,6 +189,34 @@ function App() {
     ctx.fill();
   };
 
+  const drawLine = (x1, y1, x2, y2, isSelected) => {
+    const ctx = ctxRef.current;
+  
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+  
+    if (isSelected) {
+      ctx.strokeStyle = "blue";
+      ctx.lineWidth = 3;
+    } else {
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 2;
+    }
+  
+    ctx.stroke();
+  
+    if (isSelected) {
+      ctx.fillStyle = "blue";
+    } else {
+      ctx.fillStyle = "black";
+    }
+  
+    ctx.fill();
+  };
+
+
   const removePaths = (elements) => {
     pathsRef.current = pathsRef.current.filter(
       (path) => !elements.includes(path)
@@ -214,7 +237,6 @@ function App() {
 
     redrawCanvas();
   };
-  
   
   const getMousePos = (e) => {
     const canvas = canvasRef.current;
@@ -418,9 +440,16 @@ function App() {
           path.endY,
           selectedElements.includes(path)
         );
-      } 
-      // ✅ Fix: Only use forEach for freeform paths
-      else if (Array.isArray(path)) {
+      } else if (path.type === 'line') {
+        ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
+        drawLine(
+          path.startX,
+          path.startY,
+          path.endX,
+          path.endY,
+          selectedElements.includes(path)
+        );
+      } else if (Array.isArray(path)) {
         ctx.beginPath();
         path.forEach(({ x, y }, index) => {
           if (index === 0) {
@@ -536,7 +565,6 @@ function App() {
 
   const handleDrawingShape = (e, shape) => {
     setIsDrawingShape(true);
-    setDrawingShape(shape);
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -553,13 +581,8 @@ function App() {
       width: 0,
       height: 0,
     });
+  }
 
-    console.log(      id,
-      shape,
-      x,
-      y,
-      0,0)
-  };
 
   const handleMouseDown = (e) => {
     const { offsetX, offsetY } = getMousePos(e);
@@ -651,8 +674,7 @@ function App() {
     } else if (tool === "oval") {
       handleDrawingShape(e, "oval");
     } else if (tool === "trapezoid") {
-      setIsDrawingShape(true);
-      setDrawingShape("trapezoid");
+      setIsDrawingShape(e, "trapezoid");
     } else if (tool === "star") {
       handleDrawingShape(e, "star");
     } else if (tool === "cloud") {
@@ -663,7 +685,10 @@ function App() {
       handleDrawingShape(e, "x-box");
     } else if (tool === "check-box") {
       handleDrawingShape(e, "check-box");
-    }
+    } else if (tool === "line") {
+      setIsDrawingLine(true)
+      setStartPoint({ x: offsetX, y: offsetY });
+    } 
   };
 
   const handleMouseMove = (e) => {
@@ -770,6 +795,12 @@ function App() {
         shape.height
       );
       ctx.setLineDash([]);
+    } else if (isDrawingLine) {
+      const { offsetX, offsetY } = getMousePos(e);
+      
+      redrawCanvas()
+      drawLine(startPoint.x, startPoint.y, offsetX, offsetY, false)
+
     }
   }
 
@@ -791,6 +822,22 @@ function App() {
       });
   
       setIsDrawingArrow(false); // ✅ Properly reset state
+      setStartPoint(null);
+  
+      redrawCanvas(); // ✅ Finalize the arrow on canvas
+    } else if (isDrawingLine) {
+      const { offsetX, offsetY } = getMousePos(e);
+  
+      // Save the completed arrow to pathsRef
+      pathsRef.current.push({
+        type: "line",
+        startX: startPoint.x,
+        startY: startPoint.y,
+        endX: offsetX,
+        endY: offsetY,
+      });
+  
+      setIsDrawingLine(false); // ✅ Properly reset state
       setStartPoint(null);
   
       redrawCanvas(); // ✅ Finalize the arrow on canvas
@@ -973,6 +1020,10 @@ function App() {
           { displayName: "Heart", toolName: "heart", icon: "❤️" },
           { displayName: "X-box", toolName: "x-box", icon: "❌" },
           { displayName: "Check-box", toolName: "check-box", icon: "✅" },
+          { displayName: "Line", toolName: "line", icon: "—" },
+          { displayName: "Highlight", toolName: "highlighter", icon: "🖍" },
+          { displayName: "Laser", toolName: "laser", icon: "🔴" },
+          { displayName: "Frame", toolName: "frame", icon: "🖼" },
           { displayName: "More", toolName: "more", icon: "🔍" },
         ].map((item) => (
           <div key={item.toolName} className="toolbox-item" onClick={(e) => handleToolChange(e, item.toolName)}>
