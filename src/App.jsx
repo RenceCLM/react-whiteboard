@@ -1,7 +1,29 @@
-import { canvas, path } from "framer-motion/client";
 import "./App.css";
 import { useRef, useState, useEffect } from "react";
-import { time } from "framer-motion";
+
+import selectIcon from './assets/select-icon.svg'
+import drawIcon from "./assets/draw-icon.svg"
+import arrowIcon from "./assets/arrow-icon.svg"
+import eraserIcon from "./assets/eraser-icon.svg"
+import textIcon from "./assets/text-icon.svg"
+import noteIcon from "./assets/note-icon.svg"
+import rectangleIcon from "./assets/rectangle-icon.svg"
+import circleIcon from "./assets/circle-icon.svg"
+import triangleIcon from "./assets/triangle-icon.svg"
+import diamondIcon from "./assets/diamond-icon.svg"
+import hexagonIcon from "./assets/hexagon-icon.svg"
+import ovalIcon from "./assets/oval-icon.svg"
+import trapezoidIcon from "./assets/rhombus-icon.svg"
+import starIcon from "./assets/star-icon.svg"
+import cloudIcon from "./assets/cloud-icon.svg"
+import heartIcon from "./assets/heart-icon.svg"
+import lineIcon from "./assets/line-icon.svg"
+import highlighterIcon from "./assets/highlighter-icon.svg"
+import laserIcon from "./assets/laser-icon.svg"
+import handIcon from "./assets/hand-icon.svg"
+import frameIcon from "./assets/frame-icon.svg"
+import assetIcon from "./assets/asset-icon.svg"
+
 
 function App() {
   const canvasRef = useRef(null);
@@ -739,12 +761,11 @@ function App() {
 
       const laserArray = pathsRef.current[pathsRef.current.length - 1];
 
-
         // Remove the point after 3 seconds
       setTimeout(() => {
         laserArray(laserArray.indexOf(point), 1);
         redrawCanvas(); // Redraw the canvas after removing the point
-      }, 3);
+      }, 3000);
     }
   };
 
@@ -878,7 +899,7 @@ function App() {
       setTimeout(() => {
         currentPath.splice(currentPath.indexOf(point), 1);
         redrawCanvas(); // Redraw the canvas after removing the point
-      }, 3);
+      }, 3000);
 
       redrawCanvas();
     }
@@ -1082,34 +1103,45 @@ function App() {
       ></div>
       <div id="tools-div">
         {[
-          { displayName: "Select - V", toolName: "select", icon: "👆🏼" }, // done
-          { displayName: "Hand - H", toolName: "hand", icon: "👋" }, // done
-          { displayName: "Draw - D", toolName: "draw", icon: "✏️" }, // done
-          { displayName: "Eraser - E", toolName: "eraser", icon: "🧽" },
-          { displayName: "Arrow - A", toolName: "arrow", icon: "↑" }, // done
-          { displayName: "Text - T", toolName: "text", icon: "T" },
-          { displayName: "Note - N", toolName: "note", icon: "📑" },
-          { displayName: "Asset - U", toolName: "asset", icon: "🌠" },
-          { displayName: "Rectangle - R", toolName: "rectangle", icon: "⬜️" },
-          { displayName: "Circle - C", toolName: "circle", icon: "⚪️" },
-          { displayName: "Triangle - Y", toolName: "triangle", icon: "🔺" },
-          { displayName: "Diamond", toolName: "diamond", icon: "🔷" },
-          { displayName: "Hexagon", toolName: "hexagon", icon: "🔶" },
-          { displayName: "Oval", toolName: "oval", icon: "🔵" },
-          { displayName: "Trapezoid", toolName: "trapezoid", icon: "🔹" },
-          { displayName: "Star", toolName: "star", icon: "⭐" },
-          { displayName: "Cloud", toolName: "cloud", icon: "☁️" },
-          { displayName: "Heart", toolName: "heart", icon: "❤️" },
-          { displayName: "X-box", toolName: "x-box", icon: "❌" },
-          { displayName: "Check-box", toolName: "check-box", icon: "✅" },
-          { displayName: "Line", toolName: "line", icon: "—" },
-          { displayName: "Highlight", toolName: "highlighter", icon: "🖍" },
-          { displayName: "Laser", toolName: "laser", icon: "🔴" },
-          { displayName: "Frame", toolName: "frame", icon: "🖼" },
-          { displayName: "More", toolName: "more", icon: "🔍" },
+          { displayName: "Select - V", toolName: "select", icon: selectIcon}, // done
+          { displayName: "Hand - H", toolName: "hand", icon: handIcon }, // done
+          { displayName: "Draw - D", toolName: "draw", icon: drawIcon }, // done
+          { displayName: "Eraser - E", toolName: "eraser", icon: eraserIcon },
+          { displayName: "Arrow - A", toolName: "arrow", icon: arrowIcon}, // done
+          { displayName: "Text - T", toolName: "text", icon: textIcon },
+          { displayName: "Note - N", toolName: "note", icon: noteIcon },
+          { displayName: "Asset - U", toolName: "asset", icon: assetIcon },
+          { displayName: "Rectangle - R", toolName: "rectangle", icon: rectangleIcon },
+          { displayName: "Circle - C", toolName: "circle", icon: circleIcon },
+          { displayName: "Triangle - Y", toolName: "triangle", icon: triangleIcon },
+          { displayName: "Diamond", toolName: "diamond", icon: diamondIcon },
+          { displayName: "Hexagon", toolName: "hexagon", icon: hexagonIcon },
+          { displayName: "Oval", toolName: "oval", icon: ovalIcon },
+          { displayName: "Trapezoid", toolName: "trapezoid", icon: trapezoidIcon },
+          { displayName: "Star", toolName: "star", icon: starIcon },
+          { displayName: "Cloud", toolName: "cloud", icon: cloudIcon },
+          { displayName: "Heart", toolName: "heart", icon: heartIcon },
+          // { displayName: "X-box", toolName: "x-box", icon: xboxIcon },
+          // { displayName: "Check-box", toolName: "check-box", icon: checkBoxIcon },
+          { displayName: "Line", toolName: "line", icon: lineIcon },
+          { displayName: "Highlight", toolName: "highlighter", icon: highlighterIcon },
+          { displayName: "Laser", toolName: "laser", icon: laserIcon },
+          { displayName: "Frame", toolName: "frame", icon: frameIcon },
+          // { displayName: "More", toolName: "more", icon: moreIcon },
         ].map((item) => (
-          <div key={item.toolName} className="toolbox-item" onClick={(e) => handleToolChange(e, item.toolName)}>
-            {item.icon}
+          <div 
+          key={item.toolName} 
+          className="toolbox-item" 
+          onClick={(e) => handleToolChange(e, item.toolName)}
+          style={{
+            backgroundColor: tool === item.toolName ? "lightblue" : "white",
+          }}
+          >
+            <img src={item.icon} style={{
+              width: "20px",
+              height: "20px",
+              objectFit: "contain",
+            }}></img>
           </div>
         ))}
       </div>
