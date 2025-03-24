@@ -78,15 +78,9 @@ function App() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = window.innerWidth * 0.8;
-    canvas.height = window.innerHeight * 0.8;
+    canvas.width = window.innerWidth * 0.95;
+    canvas.height = window.innerHeight * 0.95;
     const ctx = canvas.getContext("2d");
-
-    // Setup initial canvas state
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "black";
 
     ctxRef.current = ctx;
   }, []);
@@ -95,36 +89,62 @@ function App() {
 
   const findOverlappingPaths = (selectionBox) => {
     const selectedPaths = [];
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
   
-    // Check paths (lines, arrows, etc.)
+    // Convert selectionBox to canvas coordinates
+    const left = (selectionBox.left - rect.left - translationRef.current.x) / scaleRef.current;
+    const top = (selectionBox.top - rect.top - translationRef.current.y) / scaleRef.current;
+    const right = left + selectionBox.width / scaleRef.current;
+    const bottom = top + selectionBox.height / scaleRef.current;
+  
+    // ✅ Check paths (lines, arrows, shapes, etc.)
     pathsRef.current.forEach((path) => {
-      if (path.type === 'arrow') {
-        const left = Math.min(path.startX, path.endX);
-        const right = Math.max(path.startX, path.endX);
-        const top = Math.min(path.startY, path.endY);
-        const bottom = Math.max(path.startY, path.endY);
+      if (path.type === 'arrow' || path.type === 'line') {
+        const pathLeft = Math.min(path.startX, path.endX);
+        const pathRight = Math.max(path.startX, path.endX);
+        const pathTop = Math.min(path.startY, path.endY);
+        const pathBottom = Math.max(path.startY, path.endY);
   
         if (
-          left < selectionBox.left + selectionBox.width &&
-          right > selectionBox.left &&
-          top < selectionBox.top + selectionBox.height &&
-          bottom > selectionBox.top
+          pathLeft < right &&
+          pathRight > left &&
+          pathTop < bottom &&
+          pathBottom > top
         ) {
           selectedPaths.push(path);
         }
-      } else {
-        const isOverlapping = path.some(({ x, y }) => {
-          const canvas = canvasRef.current;
-          const rect = canvas.getBoundingClientRect();
+      } else if (
+        [
+          'rectangle', 'circle', 'triangle', 'diamond', 'hexagon',
+          'oval', 'trapezoid', 'star', 'cloud', 'heart', 'x-box', 'check-box'
+        ].includes(path.type)
+      ) {
+        // ✅ For shapes, use the bounding box
+        const pathLeft = path.x;
+        const pathRight = path.x + Math.abs(path.width);
+        const pathTop = path.y;
+        const pathBottom = path.y + Math.abs(path.height);
   
-          const screenX = x * scaleRef.current + translationRef.current.x + rect.left;
-          const screenY = y * scaleRef.current + translationRef.current.y + rect.top;
+        if (
+          pathLeft < right &&
+          pathRight > left &&
+          pathTop < bottom &&
+          pathBottom > top
+        ) {
+          selectedPaths.push(path);
+        }
+      } else if (Array.isArray(path) && path[0]?.type === 'highlight') {
+        // ✅ Handle highlight path
+        const isOverlapping = path.some(({ x, y }) => {
+          const screenX = x * scaleRef.current + translationRef.current.x;
+          const screenY = y * scaleRef.current + translationRef.current.y;
   
           return (
-            screenX >= selectionBox.left &&
-            screenX <= selectionBox.left + selectionBox.width &&
-            screenY >= selectionBox.top &&
-            screenY <= selectionBox.top + selectionBox.height
+            screenX >= left &&
+            screenX <= right &&
+            screenY >= top &&
+            screenY <= bottom
           );
         });
   
@@ -136,40 +156,43 @@ function App() {
   
     // ✅ Include textboxes in selection
     textBoxesRef.current.forEach((box) => {
-      const left = box.x;
-      const right = box.x + box.width;
-      const top = box.y;
-      const bottom = box.y + box.height;
+      const boxLeft = box.x;
+      const boxRight = box.x + box.width;
+      const boxTop = box.y;
+      const boxBottom = box.y + box.height;
   
       if (
-        left < selectionBox.left + selectionBox.width &&
-        right > selectionBox.left &&
-        top < selectionBox.top + selectionBox.height &&
-        bottom > selectionBox.top
+        boxLeft < right &&
+        boxRight > left &&
+        boxTop < bottom &&
+        boxBottom > top
       ) {
         selectedPaths.push(box);
       }
     });
-
-  const selectedImages = imagesRef.current.filter(image =>
-      selectionBox.top >= image.x && selectionBox.top <= image.x + image.width &&
-      selectionBox.left >= image.y && selectionBox.left <= image.y + image.height
-  );  
-
-  const selectedNotes = notesRef.current.filter(note =>
-    selectionBox.top >= note.x && selectionBox.top <= note.x + note.width &&
-    selectionBox.left >= note.y && selectionBox.left <= note.y + note.height
-  );
-
-
   
-  return [
-    ...selectedPaths,
-    ...selectedImages,
-    ...selectedNotes,
+    // ✅ Include images in selection
+    const selectedImages = imagesRef.current.filter(image =>
+      left < image.x + image.width &&
+      right > image.x &&
+      top < image.y + image.height &&
+      bottom > image.y
+    );
+  
+    // ✅ Include notes in selection
+    const selectedNotes = notesRef.current.filter(note =>
+      left < note.x + note.width &&
+      right > note.x &&
+      top < note.y + note.height &&
+      bottom > note.y
+    );
+  
+    return [
+      ...selectedPaths,
+      ...selectedImages,
+      ...selectedNotes,
     ];
   };
-  
   
   const drawArrow = (x1, y1, x2, y2, isSelected) => {
     const ctx = ctxRef.current;
@@ -241,7 +264,6 @@ function App() {
     ctx.fill();
   };
 
-
   const removePaths = (elements) => {
     pathsRef.current = pathsRef.current.filter(
       (path) => !elements.includes(path)
@@ -266,8 +288,13 @@ function App() {
   const getMousePos = (e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left - translationRef.current.x) / scaleRef.current;
-    const y = (e.clientY - rect.top - translationRef.current.y) / scaleRef.current;
+  
+    // Adjust for border width
+    const borderWidth = 5; // Match the border-width in your CSS
+  
+    const x = (e.clientX - rect.left - borderWidth - translationRef.current.x) / scaleRef.current;
+    const y = (e.clientY - rect.top - borderWidth - translationRef.current.y) / scaleRef.current;
+  
     return { offsetX: x, offsetY: y };
   };
 
@@ -314,8 +341,9 @@ function App() {
   
     // ✅ Draw paths
     pathsRef.current.forEach((path) => {
+      ctx.strokeStyle = selectedElements.includes(path) ? "blue" : "black";
+      ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
       if (path.type === 'rectangle') {
-        ctx.strokeStyle = 'black';
         ctx.strokeRect(
           Math.min(path.x, path.x + path.width),
           Math.min(path.y, path.y + path.height),
@@ -457,7 +485,6 @@ function App() {
         ctx.lineTo(path.x + path.width * 0.8, path.y + path.height * 0.2);
         ctx.stroke();
       } else if (path.type === 'arrow') {
-        ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
         drawArrow(
           path.startX,
           path.startY,
@@ -513,28 +540,12 @@ function App() {
       } else if (Array.isArray(path)) {
         ctx.beginPath();
         path.forEach(({ x, y }, index) => {
-          if (index === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        });
-    
-        ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
-        if (selectedElements.includes(path)) {
-          ctx.strokeStyle = "blue";
-          ctx.lineWidth = 3;
-        } else {
-          ctx.strokeStyle = "black";
-          ctx.lineWidth = 2;
-        }
-    
+          if (index === 0) { ctx.moveTo(x, y) } 
+          else { ctx.lineTo(x, y); }
+        })
         ctx.stroke();
       } 
     });
-
-  
-    ctx.globalAlpha = 1.0;
 
     imagesRef.current.forEach(image => {
       const img = new Image();
@@ -801,8 +812,7 @@ function App() {
 
       // Add point to current path
       const currentPath = pathsRef.current[pathsRef.current.length - 1];
-      console.log(currentPath)
-
+      // currentPath.push({ x: e.clientX, y: e.clientY });
       currentPath.push({ x: offsetX, y: offsetY });
 
   
@@ -979,23 +989,29 @@ function App() {
 
   const handleWheel = (e) => {
     // e.preventDefault();
-
-    const scaleAmount = e.deltaY < 0 ? 1.1 : 0.9;
-    const newScale = scaleRef.current * scaleAmount;
-
+  
     const canvas = canvasRef.current;
-    const mouseX = e.clientX - canvas.getBoundingClientRect().left;
-    const mouseY = e.clientY - canvas.getBoundingClientRect().top;
-
-    // Adjust translation so zooming focuses on mouse position
-    translationRef.current.x -= mouseX / scaleRef.current - mouseX / newScale;
-    translationRef.current.y -= mouseY / scaleRef.current - mouseY / newScale;
- 
+    const rect = canvas.getBoundingClientRect();
+  
+    // Mouse position relative to the canvas BEFORE scaling
+    const mouseX = (e.clientX - rect.left - translationRef.current.x) / scaleRef.current;
+    const mouseY = (e.clientY - rect.top - translationRef.current.y) / scaleRef.current;
+  
+    // Scale amount (zoom in or out)
+    const scaleAmount = e.deltaY < 0 ? 1.01 : 0.99;
+    const newScale = scaleRef.current * scaleAmount;
+  
+    // Adjust translation so zooming is centered on the mouse position
+    translationRef.current.x -= mouseX * (newScale - scaleRef.current);
+    translationRef.current.y -= mouseY * (newScale - scaleRef.current);
+  
+    // Update the scale
     scaleRef.current = newScale;
-
+  
     redrawCanvas();
   };
-
+  
+  
   const handleToolChange = (e, tool) => {
     e.preventDefault();
     if (tool == "asset") {
