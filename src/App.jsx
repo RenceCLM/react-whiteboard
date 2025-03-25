@@ -24,15 +24,17 @@ import handIcon from "./assets/hand-icon.svg"
 import frameIcon from "./assets/frame-icon.svg"
 import assetIcon from "./assets/asset-icon.svg"
 
-
 function App() {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
-
-  const [isPanning, setIsPanning] = useState(false);
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   const translationRef = useRef({ x: 0, y: 0 });
   const scaleRef = useRef(1);
+
+  const [tool, setTool] = useState("select");
+  const [activeTool, setActiveTool] = useState(null);
+
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
 
   const [selectionBox, setSelectionBox] = useState({
     left: 0,
@@ -40,25 +42,6 @@ function App() {
     width: 0,
     height: 0,
   });
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectedElements, setSelectedElements] = useState([]);
-  
-  const [isDrawing, setIsDrawing] = useState(false);
-  const pathsRef = useRef([]);
-
-  const [isDrawingArrow, setIsDrawingArrow] = useState(false);
-  const [startPoint, setStartPoint] = useState(null);
-
-  const [isErasing, setIsErasing] = useState(false);
-  const [hoveredElements, setHoveredElements] = useState([]);
-
-  const [tool, setTool] = useState("select");
-
-  const textBoxesRef = useRef([]);
-  const [isDrawingTextBox, setIsDrawingTextBox] = useState(false);
-  const [startTextBox, setStartTextBox] = useState(null);
-  const [activeInput, setActiveInput] = useState(null);
-
   const [eraserBox, setEraserBox] = useState({
     left: 0,
     top: 0,
@@ -66,15 +49,18 @@ function App() {
     height: 0,
   });
 
+  const [selectedElements, setSelectedElements] = useState([]);
+  const [hoveredElements, setHoveredElements] = useState([]);
+  
+  const pathsRef = useRef([]);
+  const textBoxesRef = useRef([]);
+  const [startTextBox, setStartTextBox] = useState(null);
+  const [activeInput, setActiveInput] = useState(null);
+
   const imagesRef = useRef([]);
   const notesRef = useRef([]);
 
-  const [isDrawingShape, setIsDrawingShape] = useState(false);
   const [currentShapeId, setCurrentShapeId] = useState(null);
-
-  const [isDrawingLine, setIsDrawingLine] = useState(false);
-  const [isHighlighting, setIsHighlighting] = useState(false);
-  const [isLaser, setIsLaser] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -134,7 +120,7 @@ function App() {
         ) {
           selectedPaths.push(path);
         }
-      } else if (Array.isArray(path) && path[0]?.type === 'highlight') {
+      } else if (Array.isArray(path)) {
         // ✅ Handle highlight path
         const isOverlapping = path.some(({ x, y }) => {
           const screenX = x * scaleRef.current + translationRef.current.x;
@@ -186,6 +172,7 @@ function App() {
       top < note.y + note.height &&
       bottom > note.y
     );
+
   
     return [
       ...selectedPaths,
@@ -636,7 +623,6 @@ function App() {
   }
 
   const handleDrawingShape = (e, shape) => {
-    setIsDrawingShape(true);
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -708,283 +694,310 @@ function App() {
       return
     }
 
-    if (tool === "hand") {
-      setIsPanning(true);
-    } else if (tool === "select") {
-      setIsSelecting(true);
-      setSelectionBox({ left: e.clientX, top: e.clientY, width: 0, height: 0 });
-      setSelectedElements([]);
-      redrawCanvas();
-    } else if (tool === "draw") {
-      setIsDrawing(true);
-
-      // Start a new path
-      pathsRef.current.push([{ x: offsetX, y: offsetY }]);
-    } else if (tool === "arrow") {
-      setIsDrawingArrow(true);
-      setStartPoint({ x: offsetX, y: offsetY });
-    } else if (tool === "eraser") {
-      setEraserBox({ left: e.clientX, top: e.clientY, width: 20, height: 20 });
-      setIsErasing(true);
-    } else if (tool === "text") {
-      setIsDrawingTextBox(true);
-      setStartTextBox({ x: offsetX, y: offsetY});
-    } else if (tool === "note") {
-      handleCreateNote(offsetX, offsetY)
-      handleToolChange(e, "select")
-    } else if (tool === "rectangle") {
-      handleDrawingShape(e, "rectangle");
-    } else if (tool === "circle") {
-      handleDrawingShape(e, "circle");
-    } else if (tool === "triangle") {
-      handleDrawingShape(e, "triangle")
-    } else if (tool === "diamond") {
-      handleDrawingShape(e, "diamond");
-    } else if (tool === "hexagon") {
-      handleDrawingShape(e, "hexagon");
-    } else if (tool === "oval") {
-      handleDrawingShape(e, "oval");
-    } else if (tool === "trapezoid") {
-      setIsDrawingShape(e, "trapezoid");
-    } else if (tool === "star") {
-      handleDrawingShape(e, "star");
-    } else if (tool === "cloud") {
-      handleDrawingShape(e, "cloud");
-    } else if (tool === "heart") {
-      handleDrawingShape(e, "heart");
-    } else if (tool === "x-box") {
-      handleDrawingShape(e, "x-box");
-    } else if (tool === "check-box") {
-      handleDrawingShape(e, "check-box");
-    } else if (tool === "line") {
-      setIsDrawingLine(true)
-      setStartPoint({ x: offsetX, y: offsetY });
-    } else if (tool === "highlighter") {
-      setIsHighlighting(true);
-      pathsRef.current.push([{x: offsetX, y: offsetY, type: 'highlight'}]);
-    } else if (tool === "laser") {
-      setIsLaser(true)
-
-      const point = {x: offsetX, y: offsetY, type: 'laser', time: Date.now()};
-
-
-      pathsRef.current.push([point]);
-
-      const laserArray = pathsRef.current[pathsRef.current.length - 1];
-
-        // Remove the point after 3 seconds
-      setTimeout(() => {
-        laserArray(laserArray.indexOf(point), 1);
-        redrawCanvas(); // Redraw the canvas after removing the point
-      }, 3000);
+    switch (tool) {
+      case "hand":
+        setActiveTool("hand");
+        break;
+    
+      case "select":
+        setActiveTool("select");
+        setSelectionBox({ left: e.clientX, top: e.clientY, width: 0, height: 0 });
+        setSelectedElements([]);
+        redrawCanvas();
+        break;
+    
+      case "draw":
+        setActiveTool("draw");
+        pathsRef.current.push([{ x: offsetX, y: offsetY }]);
+        break;
+    
+      case "arrow":
+        setActiveTool("arrow");
+        setStartPoint({ x: offsetX, y: offsetY });
+        break;
+    
+      case "eraser":
+        setActiveTool("eraser");
+        setEraserBox({ left: e.clientX, top: e.clientY, width: 20, height: 20 });
+        break;
+    
+      case "text":
+        setActiveTool("text");
+        setStartTextBox({ x: offsetX, y: offsetY });
+        break;
+    
+      case "note":
+        setActiveTool("note");
+        handleCreateNote(offsetX, offsetY);
+        handleToolChange(e, "select");
+        break;
+    
+      case "rectangle":
+      case "circle":
+      case "triangle":
+      case "diamond":
+      case "hexagon":
+      case "oval":
+      case "trapezoid":
+      case "star":
+      case "cloud":
+      case "heart":
+      case "x-box":
+      case "check-box":
+        setActiveTool("shape");
+        handleDrawingShape(e, tool);
+        break;
+    
+      case "line":
+        setActiveTool("line");
+        setStartPoint({ x: offsetX, y: offsetY });
+        break;
+    
+      case "highlighter":
+        setActiveTool("highlighter");
+        pathsRef.current.push([{ x: offsetX, y: offsetY, type: "highlight" }]);
+        break;
+    
+      case "laser": {
+        setActiveTool("laser");
+        const point = { x: offsetX, y: offsetY, type: "laser", time: Date.now() };
+        pathsRef.current.push([point]);
+    
+        const laserArray = pathsRef.current[pathsRef.current.length - 1];
+    
+        setTimeout(() => {
+          laserArray.splice(laserArray.indexOf(point), 1);
+          redrawCanvas();
+        }, 3000);
+        break;
+      }
+    
+      default:
+        console.warn(`Unhandled tool: ${tool}`);
     }
+       
   };
 
   const handleMouseMove = (e) => {
-    if (isPanning) {
-      const dx = e.clientX - lastMousePos.x;
-      const dy = e.clientY - lastMousePos.y;
+    const { offsetX, offsetY } = getMousePos(e);
+    const dx = e.clientX - lastMousePos.x;
+    const dy = e.clientY - lastMousePos.y;
   
-      translationRef.current.x += dx;
-      translationRef.current.y += dy;
+    switch (activeTool) {
+      case "hand":
+        translationRef.current.x += dx;
+        translationRef.current.y += dy;
   
-      setLastMousePos({
-        x: e.clientX,
-        y: e.clientY,
-      });
+        setLastMousePos({
+          x: e.clientX,
+          y: e.clientY,
+        });
   
-      redrawCanvas()
-    } else if (isSelecting) {
+        redrawCanvas();
+        break;
+  
+      case "select": {
         const left = Math.min(e.clientX, lastMousePos.x);
         const top = Math.min(e.clientY, lastMousePos.y);
         const width = Math.abs(e.clientX - lastMousePos.x);
         const height = Math.abs(e.clientY - lastMousePos.y);
-      
+  
         setSelectionBox({ left, top, width, height });
-      
+  
         const selectedElements = findOverlappingPaths({ left, top, width, height });
         setSelectedElements(selectedElements);
-      
-        redrawCanvas();
-      
-    } else if (isDrawing) {
-      const { offsetX, offsetY } = getMousePos(e);
-
-      // Add point to current path
-      const currentPath = pathsRef.current[pathsRef.current.length - 1];
-      // currentPath.push({ x: e.clientX, y: e.clientY });
-      currentPath.push({ x: offsetX, y: offsetY });
-
   
-      // Draw line to latest point
-      redrawCanvas(); // Redraw everything with new path
-
-    } else if (isDrawingArrow) {
-      const { offsetX, offsetY } = getMousePos(e);
-
-      redrawCanvas();
-      drawArrow(startPoint.x, startPoint.y, offsetX, offsetY, false);
-    } else if (isErasing) {
-      const width = 20;
-      const height = 20;
-      const left = e.clientX - width / 2;
-      const top = e.clientY - height / 2;
-    
-      setEraserBox({ left, top, width, height });
-    
-      // ✅ Find paths and textboxes under the eraser
-      const overlappingElements = findOverlappingPaths({
-        left,
-        top,
-        width,
-        height,
-      });
-    
-      setHoveredElements((prev) => [
-        ...new Set([...prev, ...overlappingElements]),
-      ]);
-    
-      redrawCanvas();
-    } else if (isDrawingTextBox) {
-      const { offsetX, offsetY } = getMousePos(e);
-      const width = offsetX - startTextBox.x;
-      const height = 30;
-
-      redrawCanvas();
-
-      // Draw a preview of the textbox
-      const ctx = ctxRef.current;
-      ctx.beginPath();
-      ctx.rect(startTextBox.x, startTextBox.y, width, height);
-      ctx.strokeStyle = "gray";
-      ctx.stroke();
-    } else if (isDrawingShape) {
-
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-    
-      // ✅ Update existing shape dimensions
-      const shape = pathsRef.current.find((p) => p.id === currentShapeId);
-      if (shape) {
-        shape.x = Math.min(startPoint.x, x);
-        shape.y = Math.min(startPoint.y, y);
-        shape.width = Math.abs(x - startPoint.x);
-        shape.height = Math.abs(y - startPoint.y);
-    
-        redrawCanvas(); // ✅ Redraw the canvas while drawing
+        redrawCanvas();
+        break;
       }
   
-      // ✅ Optionally draw the dashed rectangle
-      const ctx = canvasRef.current.getContext('2d');
-      ctx.setLineDash([5, 5]);
-      ctx.strokeStyle = 'gray';
-      ctx.strokeRect(
-        shape.x,
-        shape.y,
-        shape.width,
-        shape.height
-      );
-      ctx.setLineDash([]);
-    } else if (isDrawingLine) {
-      const { offsetX, offsetY } = getMousePos(e);
-      
-      redrawCanvas()
-      drawLine(startPoint.x, startPoint.y, offsetX, offsetY, false)
+      case "draw": {
+        const currentPath = pathsRef.current[pathsRef.current.length - 1];
+        currentPath.push({ x: offsetX, y: offsetY });
+  
+        redrawCanvas();
+        break;
+      }
+  
+      case "arrow":
+        redrawCanvas();
+        drawArrow(startPoint.x, startPoint.y, offsetX, offsetY, false);
+        break;
+  
+      case "eraser": {
+        const width = 20;
+        const height = 20;
+        const left = e.clientX - width / 2;
+        const top = e.clientY - height / 2;
+  
+        setEraserBox({ left, top, width, height });
+  
+        const overlappingElements = findOverlappingPaths({
+          left,
+          top,
+          width,
+          height,
+        });
+  
+        setHoveredElements((prev) => [
+          ...new Set([...prev, ...overlappingElements]),
+        ]);
+  
+        redrawCanvas();
+        break;
+      }
+  
+      case "text": {
+        const width = offsetX - startTextBox.x;
+        const height = 30;
+  
+        redrawCanvas();
+  
+        const ctx = ctxRef.current;
+        ctx.beginPath();
+        ctx.rect(startTextBox.x, startTextBox.y, width, height);
+        ctx.strokeStyle = "gray";
+        ctx.stroke();
+        break;
+      }
 
-    } else if (isHighlighting) {
-      const { offsetX, offsetY } = getMousePos(e)
+      case "shape": {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+  
+        const shape = pathsRef.current.find((p) => p.id === currentShapeId);
+        if (shape) {
+          shape.x = Math.min(startPoint.x, x);
+          shape.y = Math.min(startPoint.y, y);
+          shape.width = Math.abs(x - startPoint.x);
+          shape.height = Math.abs(y - startPoint.y);
+  
+          redrawCanvas();
+  
+          // Draw the dashed rectangle
+          const ctx = canvasRef.current.getContext('2d');
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = 'gray';
+          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+          ctx.setLineDash([]);
+        }
+        break;
+      }
+  
+      case "line":
+        redrawCanvas();
+        drawLine(startPoint.x, startPoint.y, offsetX, offsetY, false);
+        break;
+  
+      case "highlighter": {
+        const currentPath = pathsRef.current[pathsRef.current.length - 1];
+        currentPath.push({ x: offsetX, y: offsetY, type: "highlight" });
+  
+        redrawCanvas();
+        break;
+      }
 
-      const currentPath = pathsRef.current[pathsRef.current.length - 1];
-      currentPath.push({x: offsetX, y: offsetY, type: 'highlight'});
-
-      redrawCanvas();
-    } else if (isLaser) {
-      const { offsetX, offsetY } = getMousePos(e)
-
-      const currentPath = pathsRef.current[pathsRef.current.length - 1];
-      currentPath.push({x: offsetX, y: offsetY, type: 'laser', time: Date.now()});
-
-      // Remove the point after 3 seconds
-      setTimeout(() => {
-        currentPath.splice(currentPath.indexOf(point), 1);
-        redrawCanvas(); // Redraw the canvas after removing the point
-      }, 3000);
-
-      redrawCanvas();
+      case "laser": {
+        const point = { x: offsetX, y: offsetY, type: "laser", time: Date.now() };
+        const currentPath = pathsRef.current[pathsRef.current.length - 1];
+        currentPath.push(point);
+  
+        // Remove point after 3 seconds
+        setTimeout(() => {
+          currentPath.splice(currentPath.indexOf(point), 1);
+          redrawCanvas();
+        }, 3000);
+  
+        redrawCanvas();
+        break;
+      }
+  
+      default:
+        break;
     }
+
+  };
+  
+  const handleMouseUp = (e) => {
+    setSelectionBox({ left: 0, top: 0, width: 0, height: 0 });
+
+    switch (activeTool) {
+      case "arrow": {
+        const { offsetX, offsetY } = getMousePos(e);
+    
+        // Save the completed arrow to pathsRef
+        pathsRef.current.push({
+          type: "arrow",
+          startX: startPoint.x,
+          startY: startPoint.y,
+          endX: offsetX,
+          endY: offsetY,
+        });
+    
+        setStartPoint(null);
+    
+        redrawCanvas(); // ✅ Finalize the arrow on canvas
+        break
+      }
+      
+      case "line": {
+        const { offsetX, offsetY } = getMousePos(e);
+    
+        // Save the completed arrow to pathsRef
+        pathsRef.current.push({
+          type: "line",
+          startX: startPoint.x,
+          startY: startPoint.y,
+          endX: offsetX,
+          endY: offsetY,
+        });
+    
+        setStartPoint(null);
+    
+        redrawCanvas(); // ✅ Finalize the arrow on canvas
+      }
+      
+      case "eraser": {
+        // Remove hovered elements from paths
+        removePaths(hoveredElements);
+        setHoveredElements([]);
+        setEraserBox({ left: 0, top: 0, width: 0, height: 0 });
+    
+        redrawCanvas(); // Finalize the canvas state after erasure
+        break;
+      } 
+      
+      case "text": {
+        const { offsetX, offsetY } = getMousePos(e);
+        const width = offsetX - startTextBox.x;
+        const height = 30;
+
+        textBoxesRef.current.push({
+          id: Date.now(), // Add unique ID
+          x: startTextBox.x,
+          y: startTextBox.y,
+          width,
+          height,
+          text: "",
+        });
+
+        setStartTextBox(null);
+
+        redrawCanvas();
+        break;
+
+      } 
+      
+      case "shape": 
+        setCurrentShapeId(null);
+        break;
+      
+      
   }
 
-  const handleMouseUp = (e) => {
-    setIsPanning(false);
-    setIsSelecting(false);
-    setIsDrawing(false);
-    setIsHighlighting(false);
-    setIsLaser(false);
-    setSelectionBox({ left: 0, top: 0, width: 0, height: 0 });
-    if (isDrawingArrow) {
-      const { offsetX, offsetY } = getMousePos(e);
-  
-      // Save the completed arrow to pathsRef
-      pathsRef.current.push({
-        type: "arrow",
-        startX: startPoint.x,
-        startY: startPoint.y,
-        endX: offsetX,
-        endY: offsetY,
-      });
-  
-      setIsDrawingArrow(false); // ✅ Properly reset state
-      setStartPoint(null);
-  
-      redrawCanvas(); // ✅ Finalize the arrow on canvas
-    } else if (isDrawingLine) {
-      const { offsetX, offsetY } = getMousePos(e);
-  
-      // Save the completed arrow to pathsRef
-      pathsRef.current.push({
-        type: "line",
-        startX: startPoint.x,
-        startY: startPoint.y,
-        endX: offsetX,
-        endY: offsetY,
-      });
-  
-      setIsDrawingLine(false); // ✅ Properly reset state
-      setStartPoint(null);
-  
-      redrawCanvas(); // ✅ Finalize the arrow on canvas
-    } else if (isErasing) {
-      // Remove hovered elements from paths
-      removePaths(hoveredElements);
-      setHoveredElements([]);
-      setIsErasing(false);
-      setEraserBox({ left: 0, top: 0, width: 0, height: 0 });
-  
-      redrawCanvas(); // Finalize the canvas state after erasure
-    } else if (isDrawingTextBox) {
-      const { offsetX, offsetY } = getMousePos(e);
-      const width = offsetX - startTextBox.x;
-      const height = 30;
+  setActiveTool(null);
 
-      textBoxesRef.current.push({
-        id: Date.now(), // Add unique ID
-        x: startTextBox.x,
-        y: startTextBox.y,
-        width,
-        height,
-        text: "",
-      });
-
-      setIsDrawingTextBox(false);
-      setStartTextBox(null);
-
-      redrawCanvas();
-
-    } else if (isDrawingShape) {
-      setIsDrawingShape(false);
-      setCurrentShapeId(null);
-    }
   }
 
   const handleWheel = (e) => {
@@ -1010,7 +1023,6 @@ function App() {
   
     redrawCanvas();
   };
-  
   
   const handleToolChange = (e, tool) => {
     e.preventDefault();
@@ -1056,7 +1068,7 @@ function App() {
         ref={canvasRef}
         id="whiteboard-canvas"
         style={{
-          cursor: isPanning ? "grabbing" : "default"
+          cursor: activeTool==="hand" ? "grabbing" : "default"
         }}
         width={1000}
         height={600}
