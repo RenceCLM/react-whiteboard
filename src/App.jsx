@@ -121,16 +121,13 @@ function App() {
           selectedPaths.push(path);
         }
       } else if (path.type === 'draw') {
-        // ✅ Handle highlight path
         const isOverlapping = path.points.some(({ x, y }) => {
-          const screenX = x * scaleRef.current + translationRef.current.x;
-          const screenY = y * scaleRef.current + translationRef.current.y;
-  
+
           return (
-            screenX >= left &&
-            screenX <= right &&
-            screenY >= top &&
-            screenY <= bottom
+            x >= left &&
+            x <= right &&
+            y >= top &&
+            y <= bottom
           );
         });
   
@@ -325,8 +322,9 @@ function App() {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
   
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transforms for clearing
+    ctx.clearRect(0, 0, canvas.width / scaleRef.current, canvas.height/scaleRef.current); // Clear dynamically based on transform
+
     ctx.setTransform(
       scaleRef.current,
       0,
@@ -335,7 +333,7 @@ function App() {
       translationRef.current.x,
       translationRef.current.y
     );
-  
+    
     // ✅ Draw textboxes
     textBoxesRef.current.forEach((box) => {
       ctx.beginPath();
@@ -364,6 +362,7 @@ function App() {
   
     // ✅ Draw paths
     pathsRef.current.forEach((path) => {
+      ctx.lineWidth = 10
       ctx.strokeStyle = selectedElements.includes(path) ? "blue" : "black";
       ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
       if (path.type === 'rectangle') {
@@ -847,7 +846,6 @@ function App() {
   };
 
   const handleMouseMove = (e) => {
-    console.log(activeTool);
 
 
     const { offsetX, offsetY } = getMousePos(e);
@@ -882,9 +880,8 @@ function App() {
         redrawCanvas();
         break;
       }
-      
 
-      case "hand":
+      case "hand": {
         translationRef.current.x += dx;
         translationRef.current.y += dy;
   
@@ -895,6 +892,7 @@ function App() {
   
         redrawCanvas();
         break;
+      }
   
       case "select": {
         const left = Math.min(e.clientX, lastMousePos.x);
@@ -963,8 +961,8 @@ function App() {
 
       case "shape": {
         const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const x = (e.clientX - rect.left - translationRef.current.x) / scaleRef.current;
+        const y = (e.clientY - rect.top - translationRef.current.y) / scaleRef.current;
   
         const shape = pathsRef.current.find((p) => p.id === currentShapeId);
         if (shape) {
@@ -1113,7 +1111,7 @@ function App() {
     const mouseY = (e.clientY - rect.top - translationRef.current.y) / scaleRef.current;
   
     // Scale amount (zoom in or out)
-    const scaleAmount = e.deltaY < 0 ? 1.01 : 0.99;
+    const scaleAmount = e.deltaY < 0 ? 1.02 : 0.98;
     const newScale = scaleRef.current * scaleAmount;
   
     // Adjust translation so zooming is centered on the mouse position
