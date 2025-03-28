@@ -42,6 +42,7 @@ function App() {
     width: 0,
     height: 0,
   });
+  const selectedBoxRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const [eraserBox, setEraserBox] = useState({
     left: 0,
     top: 0,
@@ -51,12 +52,11 @@ function App() {
 
   const [selectedElements, setSelectedElements] = useState([]);
   const [hoveredElements, setHoveredElements] = useState([]);
-  
-  const pathsRef = useRef([]);
-  const textBoxesRef = useRef([]);
   const [startTextBox, setStartTextBox] = useState(null);
   const [activeInput, setActiveInput] = useState(null);
 
+  const pathsRef = useRef([]);
+  const textBoxesRef = useRef([]);
   const imagesRef = useRef([]);
   const notesRef = useRef([]);
 
@@ -120,9 +120,9 @@ function App() {
         ) {
           selectedPaths.push(path);
         }
-      } else if (Array.isArray(path)) {
+      } else if (path.type === 'draw') {
         // ✅ Handle highlight path
-        const isOverlapping = path.some(({ x, y }) => {
+        const isOverlapping = path.points.some(({ x, y }) => {
           const screenX = x * scaleRef.current + translationRef.current.x;
           const screenY = y * scaleRef.current + translationRef.current.y;
   
@@ -180,7 +180,43 @@ function App() {
       ...selectedNotes,
     ];
   };
+
+  const getBoundingBox = (paths) => {
+    if (paths.length === 0) return null;
   
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+  
+    paths.forEach((path) => {
+      if (path.type === 'arrow' || path.type === 'line') {
+        minX = Math.min(minX, path.startX, path.endX);
+        minY = Math.min(minY, path.startY, path.endY);
+        maxX = Math.max(maxX, path.startX, path.endX);
+        maxY = Math.max(maxY, path.startY, path.endY);
+      } else if (
+        ['rectangle', 'circle', 'triangle', 'diamond', 'hexagon',
+         'oval', 'trapezoid', 'star', 'cloud', 'heart', 'x-box', 'check-box']
+        .includes(path.type)
+      ) {
+        minX = Math.min(minX, path.x);
+        minY = Math.min(minY, path.y);
+        maxX = Math.max(maxX, path.x + Math.abs(path.width));
+        maxY = Math.max(maxY, path.y + Math.abs(path.height));
+      } else if (path.type === 'draw') {
+        path.points.forEach(({ x, y }) => {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        });
+      }
+    });
+  
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  };
+
   const drawArrow = (x1, y1, x2, y2, isSelected) => {
     const ctx = ctxRef.current;
   
@@ -488,9 +524,9 @@ function App() {
           path.endY,
           selectedElements.includes(path)
         );
-      } else if (Array.isArray(path) && path[0]?.type === 'highlight') {
+      } else if (path[0]?.type === 'highlight') {
         ctx.beginPath();
-        path.forEach(({ x, y }, index) => {
+        path.points.forEach(({ x, y }, index) => {
           if (index === 0) {
             ctx.moveTo(x, y);
           } else {
@@ -508,7 +544,7 @@ function App() {
         }
     
         ctx.stroke();
-      } else if (Array.isArray(path) && path[0]?.type === 'laser') {
+      } else if (path[0]?.type === 'laser') {
         const now = Date.now();
         path = path.filter((point) => now - point.time <= 3000); // Keep points within 3 seconds
     
@@ -524,9 +560,10 @@ function App() {
         ctx.strokeStyle = "red";
         ctx.lineWidth = 2;
         ctx.stroke();
-      } else if (Array.isArray(path)) {
+      } else if (path.type === 'draw') {
         ctx.beginPath();
-        path.forEach(({ x, y }, index) => {
+        // ctx.strokeStyle = "black";
+        path.points.forEach(({ x, y }, index) => {
           if (index === 0) { ctx.moveTo(x, y) } 
           else { ctx.lineTo(x, y); }
         })
@@ -552,7 +589,7 @@ function App() {
       }
    });
 
-   notesRef.current.forEach((note) => {
+    notesRef.current.forEach((note) => {
     if (hoveredElements.includes(note)) {
       ctx.globalAlpha = 0.3; // Transparent when erasing
     } 
@@ -578,6 +615,20 @@ function App() {
     });
 
   });
+
+    if (selectedElements.length > 0) {
+      const box = getBoundingBox(selectedElements);
+      selectedBoxRef.current = box; // ✅ Update ref directly
+      if (box) {
+        ctx.strokeStyle = "blue";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+        ctx.setLineDash([]);
+      }
+    }
+  
+
   };
 
   const handleAssetTool = () => {
@@ -646,6 +697,19 @@ function App() {
     setLastMousePos({ x: e.clientX, y: e.clientY });
     setStartPoint({ x: offsetX, y: offsetY });
 
+      // If clicked inside the selection box, enable dragging
+
+      const box = selectedBoxRef.current;
+      if (
+        offsetX >= box.x &&
+        offsetX <= box.x + box.width &&
+        offsetY >= box.y &&
+        offsetY <= box.y + box.height
+      ) {
+        setActiveTool("dragging");
+        return;
+      }
+
     if (activeInput) {
       handleInputBlur(null)
       setActiveInput(null)
@@ -708,7 +772,11 @@ function App() {
     
       case "draw":
         setActiveTool("draw");
-        pathsRef.current.push([{ x: offsetX, y: offsetY }]);
+        pathsRef.current.push({
+          id: generateId(),
+          points: [{ x: offsetX, y: offsetY }],
+          type: "draw"
+        });
         break;
     
       case "arrow":
@@ -779,11 +847,43 @@ function App() {
   };
 
   const handleMouseMove = (e) => {
+    console.log(activeTool);
+
+
     const { offsetX, offsetY } = getMousePos(e);
     const dx = e.clientX - lastMousePos.x;
     const dy = e.clientY - lastMousePos.y;
   
     switch (activeTool) {
+      case "dragging": {
+        selectedElements.forEach((selectedPath) => {
+          const path = pathsRef.current.find((p) => p.id === selectedPath.id);
+          if (path) {
+            if (path.type === "draw" || path.type === "highlight") {
+              path.points = path.points.map(({ x, y }) => ({
+                x: x + dx,
+                y: y + dy,
+              }));
+            } else if (path.type === "arrow" || path.type === "line") {
+              path.startX += dx;
+              path.startY += dy;
+              path.endX += dx;
+              path.endY += dy;
+            } else if (['rectangle', 'circle', 'triangle', 'diamond', 'hexagon',
+              'oval', 'trapezoid', 'star', 'cloud', 'heart', 'x-box', 'check-box']
+             .includes(path.type)) {
+              path.x += dx;
+              path.y += dy;
+             }
+          }
+        });
+      
+        setLastMousePos({ x: e.clientX, y: e.clientY });
+        redrawCanvas();
+        break;
+      }
+      
+
       case "hand":
         translationRef.current.x += dx;
         translationRef.current.y += dy;
@@ -812,7 +912,7 @@ function App() {
       }
   
       case "draw": {
-        const currentPath = pathsRef.current[pathsRef.current.length - 1];
+        const currentPath = pathsRef.current[pathsRef.current.length - 1].points;
         currentPath.push({ x: offsetX, y: offsetY });
   
         redrawCanvas();
@@ -928,6 +1028,7 @@ function App() {
     
         // Save the completed arrow to pathsRef
         pathsRef.current.push({
+          id: generateId(),
           type: "arrow",
           startX: startPoint.x,
           startY: startPoint.y,
@@ -946,6 +1047,7 @@ function App() {
     
         // Save the completed arrow to pathsRef
         pathsRef.current.push({
+          id: generateId(),
           type: "line",
           startX: startPoint.x,
           startY: startPoint.y,
@@ -1060,7 +1162,6 @@ function App() {
       redrawCanvas();
     }
   };
-
 
   return (
     <div id="main-div">
