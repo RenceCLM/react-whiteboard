@@ -23,6 +23,7 @@ import laserIcon from "./assets/laser-icon.svg"
 import handIcon from "./assets/hand-icon.svg"
 import frameIcon from "./assets/frame-icon.svg"
 import assetIcon from "./assets/asset-icon.svg"
+import { path } from "framer-motion/client";
 
 function App() {
   const canvasRef = useRef(null);
@@ -70,6 +71,102 @@ function App() {
 
     ctxRef.current = ctx;
   }, []);
+
+  const saveSnapshot = () => {
+    console.log("Before Saving...", undoStack.current)
+
+    undoStack.current.push({
+      paths: [...pathsRef.current],
+      textBoxes: [...textBoxesRef.current],
+      notes: [...notesRef.current],
+    });
+
+    redoStack.current = []; // Clear redo stack on new action
+  };
+
+  const handleUndo = () => {
+  
+    if (undoStack.current.length > 1) {
+      // 1. Pop the last state (which is identical to the current one)
+      undoStack.current.pop()
+  
+      // 2. The next state becomes the new "current state"
+      const lastState = undoStack.current[undoStack.current.length - 1];
+  
+      // 3. Push the current state to the redo stack
+      redoStack.current.push({
+        paths: [...pathsRef.current],
+        textBoxes: [...textBoxesRef.current],
+        notes: [...notesRef.current],
+      })
+  
+    // 4. Restore the canvas to the previous state (deep copy, because lastState is just a reference to memory)      
+      pathsRef.current = structuredClone(lastState.paths);
+      textBoxesRef.current = structuredClone(lastState.textBoxes);
+      notesRef.current = structuredClone(lastState.notes);
+      
+      
+  
+      redrawCanvas();
+
+    }
+
+  console.log("After Undo: ", undoStack.current)
+  };
+  
+  const handleRedo = () => {
+    console.log("Redo");
+  
+    if (redoStack.current.length > 0) {
+      // 1. Pop from the redo stack
+      const nextState = redoStack.current.pop();
+  
+      // 2. Push the current state to the undo stack
+      undoStack.current.push({
+        paths: [...pathsRef.current],
+        textBoxes: [...textBoxesRef.current],
+        notes: [...notesRef.current],
+      });
+  
+      // 3. Restore the canvas state
+      pathsRef.current = nextState.paths;
+      textBoxesRef.current = nextState.textBoxes;
+      notesRef.current = nextState.notes;
+  
+      redrawCanvas();
+  
+      // 4. Push the new state to undoStack (like a new snapshot)
+      undoStack.current.push({
+        paths: [...pathsRef.current],
+        textBoxes: [...textBoxesRef.current],
+        notes: [...notesRef.current],
+      });
+    }
+  };
+  
+  useEffect(() => {
+    const handleUndoRedo = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        // Ctrl+Z or Cmd+Z for Undo
+        e.preventDefault();
+        handleUndo();
+      } else if (
+        ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) ||
+        ((e.ctrlKey || e.metaKey) && e.key === 'y')
+      ) {
+        // Ctrl+Shift+Z or Cmd+Shift+Z for Redo
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+  
+    window.addEventListener('keydown', handleUndoRedo);
+    return () => window.removeEventListener('keydown', handleUndoRedo);
+  }, []);
+  
+  const undoStack = useRef([{ paths: [], textBoxes: [], notes: [] }]);
+  const redoStack = useRef([]);
+  
 
   const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -605,8 +702,6 @@ function App() {
     ctx.fillRect(note.x, note.y, note.width, note.height);
     ctx.strokeRect(note.x, note.y, note.width, note.height);
 
-
-
     ctx.fillStyle = "black";
     ctx.font = "16px Arial";
     note.text.split("\n").forEach((line, i) => {
@@ -692,6 +787,7 @@ function App() {
   }
 
   const handleMouseDown = (e) => {
+    console.log("Mouse Down", undoStack.current)
     const { offsetX, offsetY } = getMousePos(e);
     setLastMousePos({ x: e.clientX, y: e.clientY });
     setStartPoint({ x: offsetX, y: offsetY });
@@ -835,7 +931,7 @@ function App() {
         setTimeout(() => {
           laserArray.splice(laserArray.indexOf(point), 1);
           redrawCanvas();
-        }, 3000);
+        }, 500);
         break;
       }
     
@@ -846,33 +942,37 @@ function App() {
   };
 
   const handleMouseMove = (e) => {
-
-
     const { offsetX, offsetY } = getMousePos(e);
     const dx = e.clientX - lastMousePos.x;
     const dy = e.clientY - lastMousePos.y;
   
     switch (activeTool) {
       case "dragging": {
+        const adjustedDx = dx / scaleRef.current;
+        const adjustedDy = dy / scaleRef.current;
+      
         selectedElements.forEach((selectedPath) => {
           const path = pathsRef.current.find((p) => p.id === selectedPath.id);
           if (path) {
             if (path.type === "draw" || path.type === "highlight") {
               path.points = path.points.map(({ x, y }) => ({
-                x: x + dx,
-                y: y + dy,
+                x: x + adjustedDx,
+                y: y + adjustedDy,
               }));
             } else if (path.type === "arrow" || path.type === "line") {
-              path.startX += dx;
-              path.startY += dy;
-              path.endX += dx;
-              path.endY += dy;
-            } else if (['rectangle', 'circle', 'triangle', 'diamond', 'hexagon',
-              'oval', 'trapezoid', 'star', 'cloud', 'heart', 'x-box', 'check-box']
-             .includes(path.type)) {
-              path.x += dx;
-              path.y += dy;
-             }
+              path.startX += adjustedDx;
+              path.startY += adjustedDy;
+              path.endX += adjustedDx;
+              path.endY += adjustedDy;
+            } else if (
+              [
+                "rectangle", "circle", "triangle", "diamond", "hexagon",
+                "oval", "trapezoid", "star", "cloud", "heart", "x-box", "check-box"
+              ].includes(path.type)
+            ) {
+              path.x += adjustedDx;
+              path.y += adjustedDy;
+            }
           }
         });
       
@@ -912,7 +1012,7 @@ function App() {
       case "draw": {
         const currentPath = pathsRef.current[pathsRef.current.length - 1].points;
         currentPath.push({ x: offsetX, y: offsetY });
-  
+
         redrawCanvas();
         break;
       }
@@ -1005,7 +1105,7 @@ function App() {
         setTimeout(() => {
           currentPath.splice(currentPath.indexOf(point), 1);
           redrawCanvas();
-        }, 3000);
+        }, 500);
   
         redrawCanvas();
         break;
@@ -1093,6 +1193,9 @@ function App() {
         setCurrentShapeId(null);
         break;
       
+      case "draw":
+        saveSnapshot()
+        break;
       
   }
 
@@ -1163,6 +1266,13 @@ function App() {
 
   return (
     <div id="main-div">
+      <button 
+      width={100} 
+      height={100}
+      onClick={() => console.log(undoStack.current[undoStack.current.length - 1])}>
+        asdf
+      </button>
+
       <canvas
         ref={canvasRef}
         id="whiteboard-canvas"
