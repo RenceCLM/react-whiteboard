@@ -64,13 +64,81 @@ function App() {
   const [currentShapeId, setCurrentShapeId] = useState(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    canvas.width = window.innerWidth * 0.95;
-    canvas.height = window.innerHeight * 0.95;
-    const ctx = canvas.getContext("2d");
-
-    ctxRef.current = ctx;
+    const resizeCanvas = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.width = window.innerWidth * 0.95;
+        canvas.height = window.innerHeight * 0.95;
+        ctxRef.current = canvas.getContext("2d");
+        redrawCanvas(); // Redraw to reflect the current state after resizing
+      }
+    };
+  
+    // Initial setup
+    resizeCanvas();
+  
+    // Resize listener
+    window.addEventListener("resize", resizeCanvas);
+  
+    return () => {
+      window.removeEventListener("resize", resizeCanvas);
+    };
   }, []);
+
+
+  const handleExport = () => {
+    const data = JSON.stringify({
+      paths: pathsRef.current,
+      textBoxes: textBoxesRef.current,
+      notes: notesRef.current,
+    });
+  
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+  
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'canvas-state.json';
+    a.click();
+  
+    URL.revokeObjectURL(url);
+  };
+  
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+  
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+  
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const state = JSON.parse(event.target.result);
+  
+          // Load into refs
+          pathsRef.current = state.paths || [];
+          textBoxesRef.current = state.textBoxes || [];
+          notesRef.current = state.notes || [];
+  
+          redrawCanvas(); // Redraw after loading
+        } catch (error) {
+          console.error('Failed to load file:', error);
+          alert('Invalid file format');
+        }
+      };
+  
+      reader.readAsText(file);
+    };
+  
+    input.click(); // Trigger file input
+  };
+  
+  
+
+  
 
   const saveSnapshot = () => {
 
@@ -1233,8 +1301,14 @@ function App() {
     e.preventDefault();
     if (tool == "asset") {
       handleAssetTool();
+    } else if (tool == "save") {
+      handleExport();
+    } else if (tool == "load") {
+      console.log("load");
+      handleImport();
     }
     setTool(tool);
+
   };
 
   const handleInputChange = (e) => {
@@ -1268,12 +1342,6 @@ function App() {
 
   return (
     <div id="main-div">
-      <button 
-      width={100} 
-      height={100}
-      onClick={() => console.log(undoStack.current[undoStack.current.length - 1])}>
-        asdf
-      </button>
 
       <canvas
         ref={canvasRef}
@@ -1367,6 +1435,8 @@ function App() {
           { displayName: "Laser", toolName: "laser", icon: laserIcon },
           { displayName: "Frame", toolName: "frame", icon: frameIcon },
           // { displayName: "More", toolName: "more", icon: moreIcon },
+          { displayName: "Save", toolName: "save", icon: "saveIcon" },
+          { displayName: "Load", toolName: "load", icon: "loadIcon" },
         ].map((item) => (
           <div 
           key={item.toolName} 
