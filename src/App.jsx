@@ -73,7 +73,6 @@ function App() {
   }, []);
 
   const saveSnapshot = () => {
-    console.log("Before Saving...", undoStack.current)
 
     undoStack.current.push({
       paths: [...pathsRef.current],
@@ -100,48 +99,44 @@ function App() {
         notes: [...notesRef.current],
       })
   
-    // 4. Restore the canvas to the previous state (deep copy, because lastState is just a reference to memory)      
+      // 4. Restore the canvas to the previous state (deep copy, because lastState is just a reference to memory)      
       pathsRef.current = structuredClone(lastState.paths);
       textBoxesRef.current = structuredClone(lastState.textBoxes);
       notesRef.current = structuredClone(lastState.notes);
-      
-      
   
       redrawCanvas();
 
     }
 
-  console.log("After Undo: ", undoStack.current)
+    console.log("Undo", undoStack.current);
+    console.log("Redo", redoStack.current);
+
   };
   
   const handleRedo = () => {
-    console.log("Redo");
   
     if (redoStack.current.length > 0) {
       // 1. Pop from the redo stack
       const nextState = redoStack.current.pop();
   
-      // 2. Push the current state to the undo stack
-      undoStack.current.push({
-        paths: [...pathsRef.current],
-        textBoxes: [...textBoxesRef.current],
-        notes: [...notesRef.current],
-      });
-  
-      // 3. Restore the canvas state
+      // 2. Restore the canvas state
       pathsRef.current = nextState.paths;
       textBoxesRef.current = nextState.textBoxes;
       notesRef.current = nextState.notes;
   
       redrawCanvas();
   
-      // 4. Push the new state to undoStack (like a new snapshot)
+      // 3. Push the new state to undoStack (like a new snapshot)
       undoStack.current.push({
         paths: [...pathsRef.current],
         textBoxes: [...textBoxesRef.current],
         notes: [...notesRef.current],
       });
     }
+
+    console.log("Undo", undoStack.current);
+    console.log("Redo", redoStack.current);
+
   };
   
   useEffect(() => {
@@ -787,7 +782,6 @@ function App() {
   }
 
   const handleMouseDown = (e) => {
-    console.log("Mouse Down", undoStack.current)
     const { offsetX, offsetY } = getMousePos(e);
     setLastMousePos({ x: e.clientX, y: e.clientY });
     setStartPoint({ x: offsetX, y: offsetY });
@@ -1121,6 +1115,13 @@ function App() {
     setSelectionBox({ left: 0, top: 0, width: 0, height: 0 });
 
     switch (activeTool) {
+      case "note":
+      case "dragging":
+      case "draw":
+      case "highlighter":
+        saveSnapshot()
+        break;
+        
       case "arrow": {
         const { offsetX, offsetY } = getMousePos(e);
     
@@ -1137,6 +1138,7 @@ function App() {
         setStartPoint(null);
     
         redrawCanvas(); // ✅ Finalize the arrow on canvas
+        saveSnapshot();
         break
       }
       
@@ -1156,6 +1158,7 @@ function App() {
         setStartPoint(null);
     
         redrawCanvas(); // ✅ Finalize the arrow on canvas
+        saveSnapshot();
       }
       
       case "eraser": {
@@ -1165,6 +1168,7 @@ function App() {
         setEraserBox({ left: 0, top: 0, width: 0, height: 0 });
     
         redrawCanvas(); // Finalize the canvas state after erasure
+        saveSnapshot();
         break;
       } 
       
@@ -1185,16 +1189,14 @@ function App() {
         setStartTextBox(null);
 
         redrawCanvas();
+        saveSnapshot();
         break;
 
       } 
       
       case "shape": 
         setCurrentShapeId(null);
-        break;
-      
-      case "draw":
-        saveSnapshot()
+        saveSnapshot();
         break;
       
   }
