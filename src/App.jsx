@@ -366,36 +366,45 @@ function App() {
     ];
   };
 
-  const getBoundingBox = (paths) => {
-    if (paths.length === 0) return null;
+  const getBoundingBox = (elements) => {
+    if (elements.length === 0) return null;
   
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
   
-    paths.forEach((path) => {
-      if (path.type === 'arrow' || path.type === 'line') {
-        minX = Math.min(minX, path.startX, path.endX);
-        minY = Math.min(minY, path.startY, path.endY);
-        maxX = Math.max(maxX, path.startX, path.endX);
-        maxY = Math.max(maxY, path.startY, path.endY);
+    elements.forEach((element) => {
+      if (element.type === 'arrow' || element.type === 'line') {
+        // For arrows and lines
+        minX = Math.min(minX, element.startX, element.endX);
+        minY = Math.min(minY, element.startY, element.endY);
+        maxX = Math.max(maxX, element.startX, element.endX);
+        maxY = Math.max(maxY, element.startY, element.endY);
       } else if (
         ['rectangle', 'circle', 'triangle', 'diamond', 'hexagon',
          'oval', 'trapezoid', 'star', 'cloud', 'heart', 'x-box', 'check-box']
-        .includes(path.type)
+        .includes(element.type)
       ) {
-        minX = Math.min(minX, path.x);
-        minY = Math.min(minY, path.y);
-        maxX = Math.max(maxX, path.x + Math.abs(path.width));
-        maxY = Math.max(maxY, path.y + Math.abs(path.height));
-      } else if (path.type === 'draw') {
-        path.points.forEach(({ x, y }) => {
+        // For shapes
+        minX = Math.min(minX, element.x);
+        minY = Math.min(minY, element.y);
+        maxX = Math.max(maxX, element.x + Math.abs(element.width));
+        maxY = Math.max(maxY, element.y + Math.abs(element.height));
+      } else if (element.type === 'draw') {
+        // For freehand drawings
+        element.points.forEach(({ x, y }) => {
           minX = Math.min(minX, x);
           minY = Math.min(minY, y);
           maxX = Math.max(maxX, x);
           maxY = Math.max(maxY, y);
         });
+      } else if (element.text !== undefined) {
+        // For textboxes
+        minX = Math.min(minX, element.x);
+        minY = Math.min(minY, element.y);
+        maxX = Math.max(maxX, element.x + element.width);
+        maxY = Math.max(maxY, element.y + element.height);
       }
     });
   
@@ -1223,9 +1232,10 @@ function App() {
       case "dragging": {
         const adjustedDx = dx / scaleRef.current;
         const adjustedDy = dy / scaleRef.current;
-      
-        selectedElements.forEach((selectedPath) => {
-          const path = pathsRef.current.find((p) => p.id === selectedPath.id);
+  
+        selectedElements.forEach((selectedElement) => {
+          // Check if the element is a path
+          const path = pathsRef.current.find((p) => p.id === selectedElement.id);
           if (path) {
             if (path.type === "draw" || path.type === "highlight") {
               path.points = path.points.map(({ x, y }) => ({
@@ -1247,8 +1257,16 @@ function App() {
               path.y += adjustedDy;
             }
           }
+  
+          // Check if the element is a textbox
+          const textbox = textBoxesRef.current.find((t) => t.id === selectedElement.id);
+          if (textbox) {
+            console.log("Dragging textbox:", textbox);
+            textbox.x += adjustedDx;
+            textbox.y += adjustedDy;
+          }
         });
-      
+  
         setLastMousePos({ x: e.clientX, y: e.clientY });
         redrawCanvas();
         break;
@@ -1487,6 +1505,7 @@ function App() {
 
         textBoxesRef.current.push({
           id: Date.now(), // Add unique ID
+          type: "text",
           x: startTextBox.x,
           y: startTextBox.y,
           width,
@@ -1554,27 +1573,38 @@ function App() {
   const handleInputChange = (e) => {
     const textarea = e.target;
   
+    // Get the canvas context to measure text width
+    const ctx = ctxRef.current;
+    ctx.font = `${18 * scaleRef.current}px Arial`; // Match the font size to the textarea
+  
     // Calculate the number of lines based on newlines in the text
     const lineHeight = 20; // Adjust this to match your textarea's line height
     const padding = 5; // Adjust this to match your textarea's padding
     const numLines = textarea.value.split("\n").length;
   
     // Calculate the new height based on the number of lines
-    const newHeight = ((numLines * lineHeight) / scaleRef.current) + padding * 2;
+    const newHeight = (numLines * lineHeight) / scaleRef.current + padding * 2;
+  
+    // Calculate the maximum width of the text
+    const lines = textarea.value.split("\n");
+    const maxLineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
+    const newWidth = Math.max(activeInput.width, maxLineWidth / scaleRef.current + padding * 2);
+  
+    // Update the active input state
     setActiveInput((prev) => ({
       ...prev,
       text: textarea.value,
       height: newHeight,
+      width: newWidth,
     }));
   
     // Find and update the textbox in textBoxesRef
     textBoxesRef.current = textBoxesRef.current.map((textbox) =>
       textbox.id === activeInput.id
-        ? { ...textbox, height: newHeight }
+        ? { ...textbox, height: newHeight, width: newWidth }
         : textbox
     );
   
-
     redrawCanvas();
   };
 
