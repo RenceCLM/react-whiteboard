@@ -1,5 +1,5 @@
 import "./App.css";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, act } from "react";
 
 import selectIcon from './assets/select-icon.svg'
 import drawIcon from "./assets/draw-icon.svg"
@@ -63,6 +63,9 @@ function App() {
 
   const [currentShapeId, setCurrentShapeId] = useState(null);
 
+  const resizeHandlesRef = useRef([]);
+  const [resizeDirection, setResizeDirection] = useState(null);
+
   useEffect(() => {
     const resizeCanvas = () => {
       const canvas = canvasRef.current;
@@ -91,6 +94,8 @@ function App() {
       paths: pathsRef.current,
       textBoxes: textBoxesRef.current,
       notes: notesRef.current,
+      undoStack: undoStack.current,
+      redoStack: redoStack.current,
     });
   
     const blob = new Blob([data], { type: 'application/json' });
@@ -123,6 +128,10 @@ function App() {
           textBoxesRef.current = state.textBoxes || [];
           notesRef.current = state.notes || [];
   
+          // Load undo/redo stacks
+          undoStack.current = state.undoStack || [];
+          redoStack.current = state.redoStack || [];
+  
           redrawCanvas(); // Redraw after loading
         } catch (error) {
           console.error('Failed to load file:', error);
@@ -135,10 +144,6 @@ function App() {
   
     input.click(); // Trigger file input
   };
-  
-  
-
-  
 
   const saveSnapshot = () => {
 
@@ -372,6 +377,116 @@ function App() {
     });
   
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  };
+
+  const resizeSelectedElements = (handleIndex, deltaX, deltaY) => {
+    selectedElements.forEach((element) => {
+      if (element.type === "arrow" || element.type === "line") {
+        // Resizing for arrows and lines
+        if (handleIndex === 0 || handleIndex === 2) { // Top-left or Bottom-left
+          element.startX += deltaX;
+          element.startY += deltaY;
+        } else if (handleIndex === 1 || handleIndex === 3) { // Top-right or Bottom-right
+          element.endX += deltaX;
+          element.endY += deltaY;
+        }
+      } else if (element.type === "draw") {
+        // Scaling all points within the "draw" element
+        const box = getBoundingBox([element]); // Get current bounding box
+  
+        let scaleX = 1;
+        let scaleY = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+  
+        switch (handleIndex) {
+          case 0: // Top-left
+            scaleX = (box.width - deltaX) / box.width; // Shrink in X
+            scaleY = (box.height - deltaY) / box.height; // Shrink in Y
+            offsetX = deltaX; // Move the element in X direction
+            offsetY = deltaY; // Move the element in Y direction
+            console.log("Delta: ", deltaX, deltaY)
+            break;
+          case 1: // Top-right
+            scaleX = (box.width + deltaX) / box.width; // Expand in X
+            scaleY = (box.height - deltaY) / box.height; // Shrink in Y
+            offsetY = deltaY; // Move the element in Y direction
+            break;
+          case 2: // Bottom-left
+            scaleX = (box.width - deltaX) / box.width; // Shrink in X
+            scaleY = (box.height + deltaY) / box.height; // Expand in Y
+            offsetX = deltaX; // Move the element in X direction
+            break;
+          case 3: // Bottom-right
+            scaleX = (box.width + deltaX) / box.width; // Expand in X
+            scaleY = (box.height + deltaY) / box.height; // Expand in Y
+            break;
+          case 4: // Top-middle
+            scaleY = (box.height - deltaY) / box.height; // Shrink in Y
+            offsetY = deltaY; // Move the element in Y direction
+            break;
+          case 5: // Bottom-middle
+            scaleY = (box.height + deltaY) / box.height; // Expand in Y
+            break;
+          case 6: // Left-middle
+            scaleX = (box.width - deltaX) / box.width; // Shrink in X
+            offsetX = deltaX; // Move the element in X direction
+            break;
+          case 7: // Right-middle
+            scaleX = (box.width + deltaX) / box.width; // Expand in X
+            break;
+        }
+  
+        // Apply the scale to all points and adjust the position (x, y)
+        element.points.forEach((point) => {
+          point.x = (box.x + (point.x - box.x) * scaleX) + offsetX
+          point.y = (box.y + (point.y - box.y) * scaleY) + offsetY
+        });
+  
+      } else {
+        // Resizing for standard shapes (rectangles, etc.)
+        switch (handleIndex) {
+          case 0: // Top-left
+            element.x += deltaX;
+            element.y += deltaY;
+            element.width -= deltaX;
+            element.height -= deltaY;
+            break;
+          case 1: // Top-right
+            element.y += deltaY;
+            element.width += deltaX;
+            element.height -= deltaY;
+            break;
+          case 2: // Bottom-left
+            element.x += deltaX;
+            element.width -= deltaX;
+            element.height += deltaY;
+            break;
+          case 3: // Bottom-right
+            element.width += deltaX;
+            element.height += deltaY;
+            break;
+          case 4: // Top-middle
+            element.y += deltaY;
+            element.height -= deltaY;
+            break;
+          case 5: // Bottom-middle
+            element.height += deltaY;
+            break;
+          case 6: // Left-middle
+            element.x += deltaX;
+            element.width -= deltaX;
+            break;
+          case 7: // Right-middle
+            element.width += deltaX;
+            break;
+        }
+      }
+    });
+  
+    // Update bounding box after resizing
+    selectedBoxRef.current = getBoundingBox(selectedElements);
+    redrawCanvas();
   };
 
   const drawArrow = (x1, y1, x2, y2, isSelected) => {
@@ -773,17 +888,37 @@ function App() {
 
   });
 
-    if (selectedElements.length > 0) {
-      const box = getBoundingBox(selectedElements);
-      selectedBoxRef.current = box; // ✅ Update ref directly
-      if (box) {
+  if (selectedElements.length > 0) {
+    const box = getBoundingBox(selectedElements);
+    selectedBoxRef.current = box; // ✅ Update ref directly
+    if (box) {
         ctx.strokeStyle = "blue";
         ctx.lineWidth = 2;
         ctx.setLineDash([4, 4]);
         ctx.strokeRect(box.x, box.y, box.width, box.height);
         ctx.setLineDash([]);
-      }
+
+        // Draw resize handles (corners & midpoints)
+        const handleSize = 8;
+        const resizeHandles = [
+            { x: box.x, y: box.y }, // Top-left
+            { x: box.x + box.width, y: box.y }, // Top-right
+            { x: box.x, y: box.y + box.height }, // Bottom-left
+            { x: box.x + box.width, y: box.y + box.height }, // Bottom-right
+            { x: box.x + box.width / 2, y: box.y }, // Top-middle
+            { x: box.x + box.width / 2, y: box.y + box.height }, // Bottom-middle
+            { x: box.x, y: box.y + box.height / 2 }, // Left-middle
+            { x: box.x + box.width, y: box.y + box.height / 2 } // Right-middle
+        ];
+        resizeHandles.forEach(handle => {
+            ctx.fillStyle = "blue";
+            ctx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+        });
+
+        resizeHandlesRef.current = resizeHandles;
     }
+}
+
   
 
   };
@@ -854,10 +989,38 @@ function App() {
     setLastMousePos({ x: e.clientX, y: e.clientY });
     setStartPoint({ x: offsetX, y: offsetY });
 
-      // If clicked inside the selection box, enable dragging
+    const EDGE_MARGIN = 10; // Margin of error for detecting edge clicks
+    
+    const box = selectedBoxRef.current;
+    if (box) {
+      const isOnLeftEdge = offsetX >= box.x - EDGE_MARGIN && offsetX <= box.x + EDGE_MARGIN;
+      const isOnRightEdge = offsetX >= box.x + box.width - EDGE_MARGIN && offsetX <= box.x + box.width + EDGE_MARGIN;
+      const isOnTopEdge = offsetY >= box.y - EDGE_MARGIN && offsetY <= box.y + EDGE_MARGIN;
+      const isOnBottomEdge = offsetY >= box.y + box.height - EDGE_MARGIN && offsetY <= box.y + box.height + EDGE_MARGIN;
 
-      const box = selectedBoxRef.current;
-      if (
+      
+    
+      if (isOnLeftEdge || isOnRightEdge || isOnTopEdge || isOnBottomEdge) {
+        let direction = null;
+
+        if (isOnLeftEdge && isOnTopEdge) direction = "top-left";
+        else if (isOnRightEdge && isOnTopEdge) direction = "top-right";
+        else if (isOnLeftEdge && isOnBottomEdge) direction = "bottom-left";
+        else if (isOnRightEdge && isOnBottomEdge) direction = "bottom-right";
+        else if (isOnTopEdge) direction = "top-middle";
+        else if (isOnBottomEdge) direction = "bottom-middle";
+        else if (isOnLeftEdge) direction = "left-middle";
+        else if (isOnRightEdge) direction = "right-middle";
+      
+        if (direction) {
+          setResizeDirection(direction); // Set which part of the box is being resized
+          setActiveTool("resizing");
+          return;
+        }
+      }
+    
+      // Check if clicked inside the box (not on edges)
+      else if (
         offsetX >= box.x &&
         offsetX <= box.x + box.width &&
         offsetY >= box.y &&
@@ -866,12 +1029,14 @@ function App() {
         setActiveTool("dragging");
         return;
       }
+    }
 
     if (activeInput) {
       handleInputBlur(null)
       setActiveInput(null)
       return
     }
+    
     const clickedTextBox = textBoxesRef.current.find(
       (box) =>
         offsetX >= box.x &&
@@ -915,6 +1080,9 @@ function App() {
       return
     }
 
+    setSelectionBox({ left: e.clientX, top: e.clientY, width: 0, height: 0 });
+    setSelectedElements([]);
+
     switch (tool) {
       case "hand":
         setActiveTool("hand");
@@ -922,8 +1090,6 @@ function App() {
     
       case "select":
         setActiveTool("select");
-        setSelectionBox({ left: e.clientX, top: e.clientY, width: 0, height: 0 });
-        setSelectedElements([]);
         redrawCanvas();
         break;
     
@@ -1000,6 +1166,7 @@ function App() {
       default:
         console.warn(`Unhandled tool: ${tool}`);
     }
+
        
   };
 
@@ -1043,6 +1210,35 @@ function App() {
         break;
       }
 
+      case "resizing": {
+        if (!resizeDirection || !selectedBoxRef.current) return;
+      
+        const dx = (e.clientX - lastMousePos.x) / scaleRef.current;
+        const dy = (e.clientY - lastMousePos.y) / scaleRef.current;
+      
+        const handleIndexMap = {
+          "top-left": 0,
+          "top-right": 1,
+          "bottom-left": 2,
+          "bottom-right": 3,
+          "top-middle": 4,
+          "bottom-middle": 5,
+          "left-middle": 6,
+          "right-middle": 7,
+        };
+      
+        const handleIndex = handleIndexMap[resizeDirection];
+        console.log("Resizing with handle index:", handleIndex);
+      
+        if (handleIndex !== undefined) {
+          resizeSelectedElements(handleIndex, dx, dy);
+        }
+      
+        setLastMousePos({ x: e.clientX, y: e.clientY });
+        redrawCanvas();
+        break;
+      }
+      
       case "hand": {
         translationRef.current.x += dx;
         translationRef.current.y += dy;
