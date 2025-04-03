@@ -27,9 +27,6 @@
 #main-div {
     display: flex;
     height: 95vh;
-    /* border-style: solid; */
-    /* background-color: rgb(226, 222, 222); */
-
     justify-content: center;
     align-items: center;
 }

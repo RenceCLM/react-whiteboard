@@ -1,6 +1,8 @@
 import "./App.css";
 import { useRef, useState, useEffect, act } from "react";
 
+const borderWidth = 5 // FIX THIS SOMETIME
+
 import selectIcon from './assets/select-icon.svg'
 import drawIcon from "./assets/draw-icon.svg"
 import arrowIcon from "./assets/arrow-icon.svg"
@@ -73,6 +75,7 @@ function App() {
         canvas.width = window.innerWidth * 0.95;
         canvas.height = window.innerHeight * 0.95;
         ctxRef.current = canvas.getContext("2d");
+        ctxRef.current.font = "16px Arial";
         redrawCanvas(); // Redraw to reflect the current state after resizing
       }
     };
@@ -87,6 +90,26 @@ function App() {
       window.removeEventListener("resize", resizeCanvas);
     };
   }, []);
+
+  const drawTextWithLetterSpacing = (ctx, text, x, y, letterSpacing, lineHeight = 20, scale = 1) => {
+    if (!ctx) {
+      console.error("Canvas context is not initialized.");
+      return;
+    }
+  
+    const lines = text.split("\n"); // Handle multi-line text
+    lines.forEach((line, index) => {
+      let currentX = x;
+      const currentY = y + index * lineHeight * scale; // Adjust Y position for each line
+  
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        ctx.fillText(char, currentX, currentY);
+        const charWidth = ctx.measureText(char).width;
+        currentX += charWidth + (char === " " ? 0 : letterSpacing * scale); // Scale letterSpacing
+      }
+    });
+  }
 
 
   const handleExport = () => {
@@ -611,28 +634,47 @@ function App() {
     
     // ✅ Draw textboxes
     textBoxesRef.current.forEach((box) => {
+      // Scale the position and dimensions
+      const scaledX = box.x * scaleRef.current + translationRef.current.x; // REMOVE THESE LATER TO FIX THE SCALING
+      const scaledY = box.y * scaleRef.current + translationRef.current.y;
+      const scaledWidth = box.width * scaleRef.current;
+      const scaledHeight = box.height * scaleRef.current;
+    
+      // Draw the textbox rectangle
       ctx.beginPath();
-      ctx.rect(box.x, box.y, box.width, box.height);
-      
-      if (hoveredElements.includes(box)) {
-        ctx.globalAlpha = 0.3; // Transparent when erasing
-      } else {
-        ctx.globalAlpha = 1.0;
-      }
-  
-      if (selectedElements.includes(box)) {
-        ctx.strokeStyle = "blue"; // Blue when selected
-        ctx.lineWidth = 2;
-      } else {
-        ctx.strokeStyle = "black";
-        ctx.lineWidth = 1;
-      }
-  
+      ctx.rect(scaledX, scaledY, scaledWidth, scaledHeight);
+    
+      // Set transparency for hovered elements
+      ctx.globalAlpha = hoveredElements.includes(box) ? 0.3 : 1.0;
+    
+      // Set stroke style based on selection
+      ctx.strokeStyle = selectedElements.includes(box) ? "blue" : "black";
+      ctx.lineWidth = selectedElements.includes(box) ? 2 : 1;
+    
       ctx.stroke();
-  
-      ctx.font = "16px Arial";
+    
+      // Render text inside the textbox
+      ctx.font = `${15 * scaleRef.current}px Arial`; // Scale font size
       ctx.fillStyle = "black";
-      ctx.fillText(box.text, box.x + 4, box.y + 20);
+    
+      if (!box.text.trim() && (!activeInput || box.id !== activeInput.id)) {
+        // Display placeholder for empty textboxes
+        ctx.fillStyle = "gray";
+        ctx.fillText("Enter text...", scaledX + 4 * scaleRef.current, scaledY + 20 * scaleRef.current);
+      } else {
+        // Render text with letter spacing
+        drawTextWithLetterSpacing(
+          ctx,
+          box.text,
+          scaledX + 4 * scaleRef.current, // Adjust for scaling
+          scaledY + 20 * scaleRef.current, // Adjust for scaling
+          0.5 * scaleRef.current, // Scale letterSpacing
+          20 * scaleRef.current, // Scale line height
+          scaleRef.current
+        );
+
+        
+      }
     });
   
     // ✅ Draw paths
@@ -1064,6 +1106,8 @@ function App() {
         id: clickedTextBox.id,
       });
 
+      clickedTextBox.text = ""
+      redrawCanvas()
       return
     }
 
@@ -1508,10 +1552,30 @@ function App() {
   };
 
   const handleInputChange = (e) => {
+    const textarea = e.target;
+  
+    // Calculate the number of lines based on newlines in the text
+    const lineHeight = 20; // Adjust this to match your textarea's line height
+    const padding = 5; // Adjust this to match your textarea's padding
+    const numLines = textarea.value.split("\n").length;
+  
+    // Calculate the new height based on the number of lines
+    const newHeight = ((numLines * lineHeight) / scaleRef.current) + padding * 2;
     setActiveInput((prev) => ({
       ...prev,
-      text: e.target.value,
+      text: textarea.value,
+      height: newHeight,
     }));
+  
+    // Find and update the textbox in textBoxesRef
+    textBoxesRef.current = textBoxesRef.current.map((textbox) =>
+      textbox.id === activeInput.id
+        ? { ...textbox, height: newHeight }
+        : textbox
+    );
+  
+
+    redrawCanvas();
   };
 
   const handleInputBlur = () => {
@@ -1538,7 +1602,6 @@ function App() {
 
   return (
     <div id="main-div">
-
       <canvas
         ref={canvasRef}
         id="whiteboard-canvas"
@@ -1558,13 +1621,13 @@ function App() {
           onChange={handleInputChange}
           style={{
             position: "absolute",
-            left: `${activeInput.x * scaleRef.current + translationRef.current.x + canvasRef.current.getBoundingClientRect().left}px`,
-            top: `${activeInput.y * scaleRef.current + translationRef.current.y + canvasRef.current.getBoundingClientRect().top}px`,
+            left: `${activeInput.x * scaleRef.current + translationRef.current.x + canvasRef.current.getBoundingClientRect().left + borderWidth}px`,
+            top: `${activeInput.y * scaleRef.current + translationRef.current.y + canvasRef.current.getBoundingClientRect().top + borderWidth}px`,
             width: `${activeInput.width * scaleRef.current}px`,
             height: `${activeInput.height * scaleRef.current}px`,
-            fontSize: "16px",
+            font: "16px Arial",
             padding: "4px",
-            border: "1px solid black",
+            border: "0px solid black",
             zIndex: 10,
             background: "transparent",
             outline: "none",
