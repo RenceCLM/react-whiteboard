@@ -657,7 +657,7 @@ function App() {
       ctx.globalAlpha = hoveredElements.includes(box) ? 0.3 : 1.0;
     
       // Set stroke style based on selection
-      ctx.strokeStyle = selectedElements.includes(box) ? "blue" : "black";
+      ctx.strokeStyle = selectedElements.includes(box) ? "blue" : "white"; // White to make the box invisible
       ctx.lineWidth = selectedElements.includes(box) ? 2 : 1;
     
       ctx.stroke();
@@ -1513,10 +1513,20 @@ function App() {
           text: "",
         });
 
-        setStartTextBox(null);
+      
+        setActiveInput({...activeInput,
+          x: startTextBox.x,
+          y: startTextBox.y,
+          width: width,
+          height: height,
+          text: "",
+          id: Date.now()
+        });
 
+        setStartTextBox(null);
         redrawCanvas();
         saveSnapshot();
+    
         break;
 
       } 
@@ -1657,7 +1667,7 @@ function App() {
             height: `${activeInput.height * scaleRef.current}px`,
             font: "16px Arial",
             padding: "4px",
-            border: "0px solid black",
+            border: "1px solid blue",
             zIndex: 10,
             background: "transparent",
             outline: "none",
