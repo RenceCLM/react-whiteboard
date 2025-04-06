@@ -1508,15 +1508,6 @@ function App() {
 
   }
 
-  const handleKeyDown = (e) => {
-    // Loop through toolsList to find a matching shortcut
-    console.log("keypressed")
-    Object.values(toolsList).forEach((tool) => {
-      if (tool.shortcut && e.key.toUpperCase() === tool.shortcut.toUpperCase()) {
-        setTool(tool.toolName); // Set the tool if the shortcut matches
-      }
-    });
-  };
 
   const handleWheel = (e) => {
     // e.preventDefault();
