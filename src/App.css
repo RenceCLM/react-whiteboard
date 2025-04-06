@@ -31,6 +31,15 @@
     align-items: center;
 }
 
+/* #zoom-div {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    border-style: solid;
+    padding: 10px;
+    border-radius: 10px;
+} */
+
 .whiteboard-element {
     border-style: solid;
     height: 100px;

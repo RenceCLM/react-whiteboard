@@ -28,6 +28,45 @@ import assetIcon from "./assets/asset-icon.svg"
 
 import { shapeDrawers } from "./shapes";
 
+const toolsList = {
+  select: { toolName: "select", shortcut: "V", icon: selectIcon },
+  hand: { toolName: "hand", shortcut: "H", icon: handIcon },
+  draw: { toolName: "draw", shortcut: "D", icon: drawIcon },
+  eraser: { toolName: "eraser", shortcut: "E", icon: eraserIcon },
+  arrow: { toolName: "arrow", shortcut: "A", icon: arrowIcon },
+  text: { toolName: "text", shortcut: "T", icon: textIcon },
+  note: { toolName: "note", shortcut: "N", icon: noteIcon },
+  asset: { toolName: "asset", shortcut: "⌘U", icon: assetIcon },
+  rectangle: { toolName: "rectangle", icon: rectangleIcon },
+  circle: { toolName: "circle", icon: circleIcon },
+  triangle: { toolName: "triangle", icon: triangleIcon },
+  diamond: { toolName: "diamond", icon: diamondIcon },
+  hexagon: { toolName: "hexagon", icon: hexagonIcon },
+  oval: { toolName: "oval", icon: ovalIcon },
+  trapezoid: { toolName: "trapezoid", icon: trapezoidIcon },
+  star: { toolName: "star", icon: starIcon },
+  cloud: { toolName: "cloud", icon: cloudIcon },
+  heart: { toolName: "heart", icon: heartIcon },
+  line: { toolName: "line", shortcut: "L", icon: lineIcon },
+  highlighter: { toolName: "highlighter", shortcut: "⌘D", icon: highlighterIcon },
+  laser: { toolName: "laser", shortcut: "K", icon: laserIcon },
+  frame: { toolName: "frame", shortcut: "F", icon: frameIcon },
+  save: { toolName: "save", shortcut: "S", icon: "saveIcon" },
+  load: { toolName: "load", icon: "loadIcon" },
+  // { displayName: "X-box", toolName: "x-box", icon: xboxIcon },
+  // { displayName: "Check-box", toolName: "check-box", icon: checkBoxIcon },
+  // { displayName: "More", toolName: "more", icon: moreIcon },
+};
+
+// Dynamically add displayName to each tool
+Object.keys(toolsList).forEach((key) => {
+  const tool = toolsList[key];
+  tool.displayName = tool.shortcut
+    ? `${tool.toolName} - ${tool.shortcut}`
+    : tool.toolName;
+});
+
+
 function App() {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
@@ -35,6 +74,8 @@ function App() {
   const scaleRef = useRef(1);
 
   const [tool, setTool] = useState("select");
+  const [hoveredTool, setHoveredTool] = useState(null); // Track the hovered tool
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 }); // Track tooltip position
   const [activeTool, setActiveTool] = useState(null);
 
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
@@ -45,7 +86,8 @@ function App() {
     top: 0,
     width: 0,
     height: 0,
-  });
+  })
+
   const selectedBoxRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const [eraserBox, setEraserBox] = useState({
     left: 0,
@@ -54,7 +96,7 @@ function App() {
     height: 0,
   });
 
-  const [selectedElements, setSelectedElements] = useState([]);
+  const selectedElementsRef = useRef([])
   const [hoveredElements, setHoveredElements] = useState([]);
   const [startTextBox, setStartTextBox] = useState(null);
   const [activeInput, setActiveInput] = useState(null);
@@ -69,6 +111,36 @@ function App() {
 
   const resizeHandlesRef = useRef([]);
   const [resizeDirection, setResizeDirection] = useState(null);
+
+  // Add shortcut letters to tools
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Loop through toolsList to find a matching shortcut
+      Object.values(toolsList).forEach((tool) => {
+        if (tool.shortcut && e.key.toUpperCase() === tool.shortcut.toUpperCase()) {
+          setTool(tool.toolName); // Set the tool if the shortcut matches
+        }
+      });
+    };
+  
+    window.addEventListener("keydown", handleKeyDown);
+  
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+    }, []);
+
+  const handleMouseEnterTool = (toolName) => {
+    setHoveredTool(toolName); // Set the hovered tool name
+  };
+
+  const handleMouseMoveTool = (e) => {
+    setTooltipPosition({ x: e.clientX, y: e.clientY + 20 }); // Position tooltip slightly below the cursor
+  };
+
+  const handleMouseLeaveTool = () => {
+    setHoveredTool(null); // Clear the hovered tool name
+  };
 
   useEffect(() => {
     const resizeCanvas = () => {
@@ -92,6 +164,7 @@ function App() {
       window.removeEventListener("resize", resizeCanvas);
     };
   }, []);
+
 
   const drawTextWithLetterSpacing = (ctx, text, x, y, letterSpacing, lineHeight = 20, scale = 1) => {
     if (!ctx) {
@@ -258,6 +331,8 @@ function App() {
     window.addEventListener('keydown', handleUndoRedo);
     return () => window.removeEventListener('keydown', handleUndoRedo);
   }, []);
+
+
   
   const undoStack = useRef([{ paths: [], textBoxes: [], notes: [] }]);
   const redoStack = useRef([]);
@@ -422,7 +497,7 @@ function App() {
   };
 
   const resizeSelectedElements = (handleIndex, deltaX, deltaY) => {
-    selectedElements.forEach((element) => {
+    selectedElementsRef.current.forEach((element) => {
       if (element.type === "arrow" || element.type === "line") {
         // Resizing for arrows and lines
         if (handleIndex === 0 || handleIndex === 2) { // Top-left or Bottom-left
@@ -526,7 +601,7 @@ function App() {
     });
   
     // Update bounding box after resizing
-    selectedBoxRef.current = getBoundingBox(selectedElements);
+    selectedBoxRef.current = getBoundingBox(selectedElementsRef.current);
     redrawCanvas();
   };
 
@@ -599,8 +674,8 @@ function App() {
     ctx.beginPath();
     ctx.rect(box.x, box.y, box.width, box.height);
     ctx.globalAlpha = hoveredElements.includes(box) ? 0.3 : 1.0;
-    ctx.strokeStyle = selectedElements.includes(box) ? "blue" : "white";
-    ctx.lineWidth = selectedElements.includes(box) ? 2 : 1;
+    ctx.strokeStyle = selectedElementsRef.current.includes(box) ? "blue" : "white";
+    ctx.lineWidth = selectedElementsRef.current.includes(box) ? 2 : 1;
     ctx.stroke();
 
     // Draw text
@@ -623,7 +698,7 @@ function App() {
   const drawPaths = (ctx) => {
     pathsRef.current.forEach((path) => {
       ctx.lineWidth = 10;
-      ctx.strokeStyle = selectedElements.includes(path) ? "blue" : "black";
+      ctx.strokeStyle = selectedElementsRef.current.includes(path) ? "blue" : "black";
       ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
   
       if (path.type === "arrow") {
@@ -670,7 +745,7 @@ function App() {
       ctx.globalAlpha = hoveredElements.includes(note) ? 0.3 : 1.0;
       ctx.fillStyle = "yellow";
       ctx.fillRect(note.x, note.y, note.width, note.height);
-      ctx.strokeStyle = selectedElements.includes(note) ? "blue" : "black";
+      ctx.strokeStyle = selectedElementsRef.current.includes(note) ? "blue" : "black";
       ctx.lineWidth = 5;
       ctx.strokeRect(note.x, note.y, note.width, note.height);
   
@@ -682,16 +757,48 @@ function App() {
     });
   }
 
+  const drawSelectedBox = (ctx) => {
+    const box = getBoundingBox(selectedElementsRef.current);
+    if (box) {
+      selectedBoxRef.current = box;
+      ctx.strokeStyle = "blue";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(box.x, box.y, box.width, box.height);
+      ctx.setLineDash([]);
+
+      const handleSize = 8;
+      const resizeHandles = [
+        { x: box.x, y: box.y }, { x: box.x + box.width, y: box.y },
+        { x: box.x, y: box.y + box.height }, { x: box.x + box.width, y: box.y + box.height },
+        { x: box.x + box.width / 2, y: box.y }, { x: box.x + box.width / 2, y: box.y + box.height },
+        { x: box.x, y: box.y + box.height / 2 }, { x: box.x + box.width, y: box.y + box.height / 2 }
+      ];
+      resizeHandles.forEach(handle => {
+        ctx.fillStyle = "blue";
+        ctx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+      });
+      resizeHandlesRef.current = resizeHandles;
+    }
+  }
+
 
   const redrawCanvas = () => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
   
-    // Reset and clear
+    // Reset and clear the entire canvas
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width / scaleRef.current, canvas.height / scaleRef.current);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-    // Apply current transform
+    // Calculate the scaled dimensions
+    const scaledWidth = canvas.width / scaleRef.current;
+    const scaledHeight = canvas.height / scaleRef.current;
+  
+    // Clear the scaled area to ensure no artifacts remain
+    ctx.clearRect(-translationRef.current.x, -translationRef.current.y, scaledWidth, scaledHeight);
+  
+    // Apply the current transform
     ctx.setTransform(
       scaleRef.current,
       0,
@@ -700,36 +807,16 @@ function App() {
       translationRef.current.x,
       translationRef.current.y
     );
-
-    drawTextBoxes(ctx)
-    drawImages(ctx)
-    drawPaths(ctx)
-    drawNotes(ctx)
   
-    // ✅ Draw selection box & resize handles
-    if (selectedElements.length > 0) {
-      const box = getBoundingBox(selectedElements);
-      if (box) {
-        selectedBoxRef.current = box;
-        ctx.strokeStyle = "blue";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(box.x, box.y, box.width, box.height);
-        ctx.setLineDash([]);
+    // Redraw all elements
+    drawTextBoxes(ctx);
+    drawImages(ctx);
+    drawPaths(ctx);
+    drawNotes(ctx);
   
-        const handleSize = 8;
-        const resizeHandles = [
-          { x: box.x, y: box.y }, { x: box.x + box.width, y: box.y },
-          { x: box.x, y: box.y + box.height }, { x: box.x + box.width, y: box.y + box.height },
-          { x: box.x + box.width / 2, y: box.y }, { x: box.x + box.width / 2, y: box.y + box.height },
-          { x: box.x, y: box.y + box.height / 2 }, { x: box.x + box.width, y: box.y + box.height / 2 }
-        ];
-        resizeHandles.forEach(handle => {
-          ctx.fillStyle = "blue";
-          ctx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
-        });
-        resizeHandlesRef.current = resizeHandles;
-      }
+    // Draw selection box if elements are selected
+    if (selectedElementsRef.current.length > 0) {
+      drawSelectedBox(ctx);
     }
   };
 
@@ -795,25 +882,25 @@ function App() {
   }
 
   const getElementCenter = (element) => {
-  if (element.type === "arrow" || element.type === "line") {
-    return {
-      x: (element.startX + element.endX) / 2,
-      y: (element.startY + element.endY) / 2,
-    };
-  } else if (element.points) {
-    // For freehand drawings, calculate the bounding box center
-    const minX = Math.min(...element.points.map((p) => p.x));
-    const maxX = Math.max(...element.points.map((p) => p.x));
-    const minY = Math.min(...element.points.map((p) => p.y));
-    const maxY = Math.max(...element.points.map((p) => p.y));
-    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-  } else {
-    // For rectangles, images, textboxes, and notes
-    return {
-      x: element.x + element.width / 2,
-      y: element.y + element.height / 2,
-    };
-  }
+    if (element.type === "arrow" || element.type === "line") {
+      return {
+        x: (element.startX + element.endX) / 2,
+        y: (element.startY + element.endY) / 2,
+      };
+    } else if (element.points) {
+      // For freehand drawings, calculate the bounding box center
+      const minX = Math.min(...element.points.map((p) => p.x));
+      const maxX = Math.max(...element.points.map((p) => p.x));
+      const minY = Math.min(...element.points.map((p) => p.y));
+      const maxY = Math.max(...element.points.map((p) => p.y));
+      return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    } else {
+      // For rectangles, images, textboxes, and notes
+      return {
+        x: element.x + element.width / 2,
+        y: element.y + element.height / 2,
+      };
+    }
   };
 
   const getElementCenterById = (id) => {
@@ -832,15 +919,41 @@ function App() {
       x >= ex && x <= ex + width && y >= ey && y <= ey + height
   );
 
-  const handleMouseDown = (e) => {
 
+  const handleMouseDown = (e) => {
     const { offsetX, offsetY } = getMousePos(e);
     setLastMousePos({ x: e.clientX, y: e.clientY });
     setStartPoint({ x: offsetX, y: offsetY });
+    // Check if clicked on an image
+    const clickedImage = findElementAtPosition(imagesRef.current, offsetX, offsetY)
+    const clickedTextBox = findElementAtPosition(textBoxesRef.current, offsetX, offsetY);
+    const clickedNote = findElementAtPosition(notesRef.current, offsetX, offsetY);
+    const clickedPath = null // figure out how to see if user clicked on a path
+    const box = selectedBoxRef.current;
+
   
     const EDGE_MARGIN = 10; // Margin of error for detecting edge clicks
   
-    const box = selectedBoxRef.current;
+    if (e.button === 2) {
+      setTool("hand")
+    }
+
+    // if clicked on canvas
+    if (!(clickedImage || clickedTextBox || clickedNote || box )) {
+      selectedBoxRef.current = null
+      selectedElementsRef.current = []
+    }
+
+    // clears textbox editing
+    if (activeInput) {
+      handleInputBlur(null);
+      setActiveInput(null);
+      return;
+    }
+
+    console.log("There is a box?", selectedBoxRef.current)
+
+
     if (box) {
       const inXRange = (val, target) => Math.abs(val - target) <= EDGE_MARGIN;
       const inYRange = (val, target) => Math.abs(val - target) <= EDGE_MARGIN;
@@ -850,6 +963,7 @@ function App() {
       const isOnTopEdge = inYRange(offsetY, box.y);
       const isOnBottomEdge = inYRange(offsetY, box.y + box.height);
   
+      // Check if on edges and setTool "resize"
       if (isOnLeftEdge || isOnRightEdge || isOnTopEdge || isOnBottomEdge) {
         let direction = null;
   
@@ -877,64 +991,17 @@ function App() {
         offsetY <= box.y + box.height
       ) {
         setActiveTool("dragging");
+        console.log("Setting tool to dragging")
         return;
       }
     }
-  
-    if (activeInput) {
-      handleInputBlur(null);
-      setActiveInput(null);
-      return;
-    }
-  
-
-  
-    // Check if clicked on a path
-    const clickedPath = pathsRef.current.find((path) => {
-      if (path.type === "arrow" || path.type === "line") {
-        const pathLeft = Math.min(path.startX, path.endX);
-        const pathRight = Math.max(path.startX, path.endX);
-        const pathTop = Math.min(path.startY, path.endY);
-        const pathBottom = Math.max(path.startY, path.endY);
-  
-        return offsetX >= pathLeft && offsetX <= pathRight && offsetY >= pathTop && offsetY <= pathBottom;
-      } else if (path.type === "draw" || path.type === "highlight") {
-        console.log("CLICKLED ON  PATH")
-        return path.points.some(({ x, y }) => Math.abs(x - offsetX) < 5 && Math.abs(y - offsetY) < 5);
-      } else {
-        return (
-          offsetX >= path.x &&
-          offsetX <= path.x + path.width &&
-          offsetY >= path.y &&
-          offsetY <= path.y + path.height
-        );
-      }
-    });
-  
-    // Check if clicked on an image
-    const clickedImage = imagesRef.current.find(
-      (image) =>
-        offsetX >= image.x &&
-        offsetX <= image.x + image.width &&
-        offsetY >= image.y &&
-        offsetY <= image.y + image.height
-    );
-  
-    if (clickedPath && tool !=="arrow") {
-      setSelectedElements([clickedPath]); // Select the clicked path
-      console.log("Clicked path:", clickedPath);
-      redrawCanvas();
-      return;
-    }
-  
+    
     if (clickedImage && tool !== "arrow") {
-      setSelectedElements([clickedImage]); // Select the clicked image
+      console.log("clickedImage and setting selectedElements")
+      selectedElementsRef.current = [clickedImage] // Select the clicked image
       redrawCanvas()
       return;
     }
-  
-    const clickedTextBox = findElementAtPosition(textBoxesRef.current, offsetX, offsetY);
-    const clickedNote = findElementAtPosition(notesRef.current, offsetX, offsetY);
   
     if (clickedTextBox && tool !=="arrow") {
       setActiveInput((prev) => ({
@@ -968,9 +1035,10 @@ function App() {
       return;
     }
   
-    setSelectionBox({ left: e.clientX, top: e.clientY, width: 0, height: 0 });
-    setSelectedElements([]);
+    setSelectionBox({ left: e.clientX, top: e.clientY, width: 0, height: 0 })
+    selectedElementsRef.current = [];
   
+    
     switch (tool) {
       case "hand":
         setActiveTool("hand");
@@ -1120,9 +1188,9 @@ function App() {
         const adjustedDx = dx / scaleRef.current;
         const adjustedDy = dy / scaleRef.current;
 
-        const selectedMap = new Map(selectedElements.map(el => [el.id, el]));
+        const selectedMap = new Map(selectedElementsRef.current.map(el => [el.id, el]));
   
-        selectedElements.forEach(selectedElement => {
+        selectedElementsRef.current.forEach(selectedElement => {
         const element = selectedMap.get(selectedElement.id);
         if (!element) return;
 
@@ -1194,10 +1262,10 @@ function App() {
         const width = Math.abs(e.clientX - lastMousePos.x);
         const height = Math.abs(e.clientY - lastMousePos.y);
   
-        setSelectionBox({ left, top, width, height });
+        setSelectionBox({ left, top, width, height })
   
         const selectedElements = findOverlappingPaths({ left, top, width, height });
-        setSelectedElements(selectedElements);
+        selectedElementsRef.current = selectedElements
   
         redrawCanvas();
         break;
@@ -1323,7 +1391,7 @@ function App() {
   };
   
   const handleMouseUp = (e) => {
-    setSelectionBox({ left: 0, top: 0, width: 0, height: 0 });
+    setSelectionBox({ left: 0, top: 0, width: 0, height: 0 })
 
     switch (activeTool) {
       case "note":
@@ -1440,6 +1508,16 @@ function App() {
 
   }
 
+  const handleKeyDown = (e) => {
+    // Loop through toolsList to find a matching shortcut
+    console.log("keypressed")
+    Object.values(toolsList).forEach((tool) => {
+      if (tool.shortcut && e.key.toUpperCase() === tool.shortcut.toUpperCase()) {
+        setTool(tool.toolName); // Set the tool if the shortcut matches
+      }
+    });
+  };
+
   const handleWheel = (e) => {
     // e.preventDefault();
   
@@ -1479,11 +1557,6 @@ function App() {
   };
 
   const handleInputChange = (e) => {
-
-
-
-
-
     const textarea = e.target
   
     // Get the canvas context to measure text width
@@ -1556,6 +1629,7 @@ function App() {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onContextMenu={(e) => {e.preventDefault()}}
         onWheel={handleWheel}
       />
        {activeInput && (
@@ -1568,7 +1642,7 @@ function App() {
             top: `${activeInput.y * scaleRef.current + translationRef.current.y + canvasRef.current.getBoundingClientRect().top + borderWidth}px`,
             width: `${activeInput.width * scaleRef.current}px`,
             height: `${activeInput.height * scaleRef.current}px`,
-            font: "16px Arial",
+            font: `${15 * scaleRef.current}px Arial`,
             padding: "4px",
             border: "1px solid blue",
             zIndex: 10,
@@ -1582,6 +1656,19 @@ function App() {
           autoFocus
         />
       )}
+      <div
+        id="zoom-div"
+        style={{
+          position: "absolute",
+          bottom: "50px", // Adjust as needed
+          left: "60px", // Adjust as needed
+          backgroundColor: "rgba(255, 255, 255, 0.8)", // Optional styling
+          padding: "5px", // Optional styling
+          borderRadius: "5px", // Optional styling
+          boxShadow: "0 2px 5px rgba(0, 0, 0, 0.2)", // Optional styling
+        }}
+      > Zoom: {Math.round(scaleRef.current * 10000) / 10000}%
+    </div>
       <div
         id="selection-box"
         style={{
@@ -1611,51 +1698,47 @@ function App() {
         }}
       ></div>
       <div id="tools-div">
-        {[
-          { displayName: "Select - V", toolName: "select", icon: selectIcon}, // done
-          { displayName: "Hand - H", toolName: "hand", icon: handIcon }, // done
-          { displayName: "Draw - D", toolName: "draw", icon: drawIcon }, // done
-          { displayName: "Eraser - E", toolName: "eraser", icon: eraserIcon },
-          { displayName: "Arrow - A", toolName: "arrow", icon: arrowIcon}, // done
-          { displayName: "Text - T", toolName: "text", icon: textIcon },
-          { displayName: "Note - N", toolName: "note", icon: noteIcon },
-          { displayName: "Asset - U", toolName: "asset", icon: assetIcon },
-          { displayName: "Rectangle - R", toolName: "rectangle", icon: rectangleIcon },
-          { displayName: "Circle - C", toolName: "circle", icon: circleIcon },
-          { displayName: "Triangle - Y", toolName: "triangle", icon: triangleIcon },
-          { displayName: "Diamond", toolName: "diamond", icon: diamondIcon },
-          { displayName: "Hexagon", toolName: "hexagon", icon: hexagonIcon },
-          { displayName: "Oval", toolName: "oval", icon: ovalIcon },
-          { displayName: "Trapezoid", toolName: "trapezoid", icon: trapezoidIcon },
-          { displayName: "Star", toolName: "star", icon: starIcon },
-          { displayName: "Cloud", toolName: "cloud", icon: cloudIcon },
-          { displayName: "Heart", toolName: "heart", icon: heartIcon },
-          // { displayName: "X-box", toolName: "x-box", icon: xboxIcon },
-          // { displayName: "Check-box", toolName: "check-box", icon: checkBoxIcon },
-          { displayName: "Line", toolName: "line", icon: lineIcon },
-          { displayName: "Highlight", toolName: "highlighter", icon: highlighterIcon },
-          { displayName: "Laser", toolName: "laser", icon: laserIcon },
-          { displayName: "Frame", toolName: "frame", icon: frameIcon },
-          // { displayName: "More", toolName: "more", icon: moreIcon },
-          { displayName: "Save", toolName: "save", icon: "saveIcon" },
-          { displayName: "Load", toolName: "load", icon: "loadIcon" },
-        ].map((item) => (
-          <div 
-          key={item.toolName} 
-          className="toolbox-item" 
-          onClick={(e) => handleToolChange(e, item.toolName)}
-          style={{
-            backgroundColor: tool === item.toolName ? "lightblue" : "white",
-          }}
+        {Object.entries(toolsList).map(([key, item]) => (
+          <div
+            key={key} // Use the key from the object
+            className="toolbox-item"
+            onClick={(e) => handleToolChange(e, item.toolName)}
+            onMouseEnter={() => handleMouseEnterTool(item.displayName)} // Set hovered tool
+            onMouseMove={handleMouseMoveTool} // Track cursor position
+            onMouseLeave={handleMouseLeaveTool} // Clear hovered tool
+            style={{
+              backgroundColor: tool === item.toolName ? "lightblue" : "white",
+            }}
           >
-            <img src={item.icon} style={{
-              width: "20px",
-              height: "20px",
-              objectFit: "contain",
-            }}></img>
+            <img
+              src={item.icon}
+              style={{
+                width: "20px",
+                height: "20px",
+                objectFit: "contain",
+              }}
+            />
           </div>
         ))}
       </div>
+      {hoveredTool && (
+        <div
+          style={{
+            position: "absolute",
+            top: `${tooltipPosition.y}px`,
+            left: `${tooltipPosition.x}px`,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            color: "white",
+            padding: "5px 10px",
+            borderRadius: "5px",
+            fontSize: "14px",
+            pointerEvents: "none", // Prevent tooltip from interfering with mouse events
+            transform: "translate(-50%, 0)", // Center the tooltip horizontally
+          }}
+        >
+          {hoveredTool.charAt(0).toUpperCase() + hoveredTool.slice(1)}           {/* Capitalize the first letter */}
+        </div> 
+      )}
     </div>
   );
 }
