@@ -147,14 +147,14 @@ export const drawHeart = (ctx, path) => {
 
 
 
-export const drawLinePath = (ctx, path) => {
+export const drawLine = (ctx, path) => {
   ctx.beginPath();
   ctx.moveTo(path.startX, path.startY);
   ctx.lineTo(path.endX, path.endY);
   ctx.stroke();
 };
 
-export const drawArrowPath = (ctx, path) => {
+export const drawArrow = (ctx, path) => {
   // Calculate the angle of the arrow
   const angle = Math.atan2(path.endY - path.startY, path.endX - path.startX);
   
@@ -242,8 +242,8 @@ export const shapeDrawers = {
   star: drawStar,           // Added star
   cloud: drawCloud,         // Added cloud
   heart: drawHeart,         // Added heart
-  line: drawLinePath,
-  arrow: drawArrowPath,
+  line: drawLine,
+  arrow: drawArrow,
   highlight: drawHighlight,
   laser: drawLaser,
   draw: drawCustomShape,
