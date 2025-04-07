@@ -68,6 +68,8 @@ Object.keys(toolsList).forEach((key) => {
 
 
 function App() {
+  const [_, setForceRender] = useState(0); // Dummy state to trigger re-renders
+
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const translationRef = useRef({ x: 0, y: 0 });
@@ -673,14 +675,15 @@ function App() {
    textBoxesRef.current.forEach((box) => {
     ctx.beginPath();
     ctx.rect(box.x, box.y, box.width, box.height);
-    ctx.globalAlpha = hoveredElements.includes(box) ? 0.3 : 1.0;
+    ctx.globalAlpha = hoveredElements.includes(box) ? 0.3 : 1;
     ctx.strokeStyle = selectedElementsRef.current.includes(box) ? "blue" : "white";
     ctx.lineWidth = selectedElementsRef.current.includes(box) ? 2 : 1;
     ctx.stroke();
 
     // Draw text
-    ctx.font = `${15 * scaleRef.current}px Arial`;
-    ctx.fillStyle = box.text.trim() ? "black" : "gray";
+    ctx.globalAlpha = selectedElementsRef.current.includes(box) ? box.transparency * 0.3 : box.transparency;
+    ctx.font = `${box.fontSize * scaleRef.current}px ${box.font}`;
+    ctx.fillStyle = box.text.trim() ? box.color : "gray";
 
     drawTextWithLetterSpacing(
       ctx,
@@ -1476,6 +1479,10 @@ function App() {
           y: startTextBox.y,
           width,
           height,
+          color: "#000000",
+          transparency: 100,
+          font: "Arial",
+          fontSize: 16,
           text: "",
         });
 
@@ -1647,6 +1654,431 @@ function App() {
           autoFocus
         />
       )}
+      <div 
+        id="elementsSettingsPanel"
+        style={{
+          position: "absolute",
+          right: "50px",
+          top: "10px",
+          backgroundColor: "rgba(255, 255, 255, 0.8)",
+          padding: "10px",
+          borderRadius: "10px",
+          boxShadow: "0 2px 5px rgba(0, 0, 0, 0.2)",
+          width: "200px",
+        }}
+      >
+        {selectedElementsRef.current.length === 1 ? (
+          // Show settings for the selected element
+          (() => {
+            const selectedElement = selectedElementsRef.current[0];
+            switch (selectedElement.type) {
+              case "text":
+                return (
+                  <>
+                    <div id="colorPanel" style={{ marginBottom: "15px" }}>
+                      <h4 style={{ margin: "5px 0" }}>Text Color</h4>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(4, 1fr)", // 4 columns
+                          gap: "10px",
+                        }}
+                      >
+                        {[
+                          "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
+                          "#FF00FF", "#00FFFF", "#FFA500", "#800080",
+                          "#808080", "#000000", "#FFFFFF", "custom",
+                        ].map((color, index) => (
+                          <button
+                            key={index}
+                            style={{
+                              width: "30px",
+                              height: "30px",
+                              borderRadius: "50%",
+                              backgroundColor: color === "custom" ? "#ccc" : color,
+                              border: "2px solid #ccc",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            onClick={() => {
+                              if (color === "custom") {
+                                const colorPicker = document.createElement("input");
+                                colorPicker.type = "color";
+                                colorPicker.style.position = "absolute";
+                                colorPicker.style.opacity = "0";
+                                document.body.appendChild(colorPicker);
+                                colorPicker.click();
+                                colorPicker.oninput = (e) => {
+                                  const newColor = e.target.value;
+                    
+                                  // Update the color in textBoxesRef immutably
+                                  textBoxesRef.current = textBoxesRef.current.map((textbox) =>
+                                    textbox.id === selectedElement.id
+                                      ? { ...textbox, color: newColor }
+                                      : textbox
+                                  );
+                    
+                                  // Update the selected element reference immutably
+                                  selectedElementsRef.current = selectedElementsRef.current.map((element) =>
+                                    element.id === selectedElement.id
+                                      ? { ...element, color: newColor }
+                                      : element
+                                  );
+                    
+                                  // Trigger a re-render
+                                  setForceRender((prev) => prev + 1);
+                                  redrawCanvas();
+                    
+                                  document.body.removeChild(colorPicker);
+                                };
+                              } else {
+                                // Update the color directly
+                                textBoxesRef.current = textBoxesRef.current.map((textbox) =>
+                                  textbox.id === selectedElement.id
+                                    ? { ...textbox, color: color }
+                                    : textbox
+                                );
+                    
+                                selectedElementsRef.current = selectedElementsRef.current.map((element) =>
+                                  element.id === selectedElement.id
+                                    ? { ...element, color: color }
+                                    : element
+                                );
+                    
+                                setForceRender((prev) => prev + 1);
+                                redrawCanvas();
+                              }
+                            }}
+                          >
+                            {color === "custom" && "+"} {/* Show "+" for the custom color button */}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div id="transparencyPanel" style={{ marginBottom: "15px" }}>
+                      <h4 style={{ margin: "5px 0" }}>Transparency</h4>
+                      <input
+                        type="range"
+                        value={selectedElement.transparency || 1} // Default to fully opaque
+                        min="0.01"
+                        max="1"
+                        step="0.01"
+                        style={{
+                          width: "100%",
+                        }}
+                        onChange={(e) => {
+                          const newTransparency = parseFloat(e.target.value);
+                    
+                          // Update the transparency in textBoxesRef immutably
+                          textBoxesRef.current = textBoxesRef.current.map((textbox) =>
+                            textbox.id === selectedElement.id
+                              ? { ...textbox, transparency: newTransparency }
+                              : textbox
+                          );
+                    
+                          // Update the selected element reference immutably
+                          selectedElementsRef.current = selectedElementsRef.current.map((element) =>
+                            element.id === selectedElement.id
+                              ? { ...element, transparency: newTransparency }
+                              : element
+                          );
+                    
+                          // Trigger a re-render
+                          setForceRender((prev) => prev + 1);
+                          redrawCanvas();
+                        }}
+                      />
+                    </div>
+                    <div id="fontPanel" style={{ marginBottom: "15px" }}>
+                      <h4 style={{ margin: "5px 0" }}>Font</h4>
+                      <select
+                        value={selectedElement.font} // Show the current font
+                        style={{
+                          width: "100%",
+                          padding: "5px",
+                          borderRadius: "5px",
+                          border: "1px solid #ccc",
+                        }}
+                        onChange={(e) => {
+                          const newFont = e.target.value;
+              
+                          // Update the font in textBoxesRef immutably
+                          textBoxesRef.current = textBoxesRef.current.map((textbox) =>
+                            textbox.id === selectedElement.id
+                              ? { ...textbox, font: newFont }
+                              : textbox
+                          );
+              
+                          // Update the selected element reference immutably
+                          selectedElementsRef.current = selectedElementsRef.current.map((element) =>
+                            element.id === selectedElement.id
+                              ? { ...element, font: newFont }
+                              : element
+                          );
+              
+                          // Trigger a re-render
+                          setForceRender((prev) => prev + 1);
+                          redrawCanvas();
+                        }}
+                      >
+                        {/* List of common fonts */}
+                        <option value="Arial">Arial</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Lucida Console">Lucida Console</option>
+                        <option value="Tahoma">Tahoma</option>
+                        <option value="Trebuchet MS">Trebuchet MS</option>
+                        <option value="Impact">Impact</option>
+                        <option value="Comic Sans MS">Comic Sans MS</option>
+                        <option value="Palatino Linotype">Palatino Linotype</option>
+                        <option value="Garamond">Garamond</option>
+                        <option value="Bookman">Bookman</option>
+                        <option value="Candara">Candara</option>
+                        <option value="Arial Black">Arial Black</option>
+                        <option value="Segoe UI">Segoe UI</option>
+                      </select>
+                    </div>
+                    <div id="fontSizePanel" style={{ marginBottom: "15px" }}>
+                      <h4 style={{ margin: "5px 0" }}>Font Size</h4>
+                      <input
+                        type="number"
+                        value={selectedElement.fontSize} // Show the current font size
+                        min="1"
+                        max="10000"
+                        style={{
+                          width: "100%",
+                          padding: "5px",
+                          borderRadius: "5px",
+                          border: "1px solid #ccc",
+                        }}
+                        onChange={(e) => {
+                          const newFontSize = parseInt(e.target.value, 10);
+              
+                          // Update the font size in textBoxesRef immutably
+                          textBoxesRef.current = textBoxesRef.current.map((textbox) =>
+                            textbox.id === selectedElement.id
+                              ? { ...textbox, fontSize: newFontSize }
+                              : textbox
+                          );
+              
+                          // Update the selected element reference
+                          selectedElementsRef.current = selectedElementsRef.current.map((element) =>
+                            element.id === selectedElement.id
+                              ? { ...element, fontSize: newFontSize }
+                              : element
+                          );
+              
+                          // Trigger a re-render
+                          setForceRender((prev) => prev + 1);
+                          redrawCanvas();
+                        }}
+                      />
+                    </div>
+
+                  </>
+                );          
+              case "note":
+                return (
+                  <>
+                    <div id="fontPanel" style={{ marginBottom: "15px" }}>
+                      <h4 style={{ margin: "5px 0" }}>Font</h4>
+                      <input
+                        type="text"
+                        placeholder="Arial"
+                        style={{
+                          width: "100%",
+                          padding: "5px",
+                          borderRadius: "5px",
+                          border: "1px solid #ccc",
+                        }}
+                        onChange={(e) => console.log(`Selected font: ${e.target.value}`)}
+                      />
+                    </div>
+                    <div id="textAlignmentPanel">
+                      <h4 style={{ margin: "5px 0" }}>Text Alignment</h4>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        {["left", "center", "right", "justify"].map((align) => (
+                          <button
+                            key={align}
+                            style={{
+                              width: "40px",
+                              height: "40px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderRadius: "5px",
+                              border: "1px solid #ccc",
+                              backgroundColor: "#f9f9f9",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => console.log(`Selected alignment: ${align}`)}
+                          >
+                            {align.charAt(0).toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              case "rectangle":
+              case "circle":
+              case "triangle":
+              case "diamond":
+              case "hexagon":
+              case "oval":
+              case "trapezoid":
+              case "star":
+              case "cloud":
+              case "heart":
+              case "line":
+              case "arrow":
+                return (
+                  <>
+                    <div id="colorPanel" style={{ marginBottom: "15px" }}>
+                      <h4 style={{ margin: "5px 0" }}>Colors</h4>
+                      <div 
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(4, 1fr)",
+                          gap: "10px",
+                        }}
+                      >
+                        {[
+                          "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
+                          "#FF00FF", "#00FFFF", "#FFA500", "#800080",
+                          "#808080", "#000000", "#FFFFFF", "custom",
+                        ].map((color) => (
+                          <button
+                            key={color}
+                            style={{
+                              width: "30px",
+                              height: "30px",
+                              borderRadius: "50%",
+                              backgroundColor: color === "custom" ? "#ccc" : color,
+                              border: "2px solid #ccc",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => {
+                              if (color === "custom") {
+                                const colorPicker = document.createElement("input");
+                                colorPicker.type = "color";
+                                colorPicker.style.position = "absolute";
+                                colorPicker.style.opacity = "0";
+                                document.body.appendChild(colorPicker);
+                                colorPicker.click();
+                                colorPicker.oninput = (e) => {
+                                  console.log(`Selected custom color: ${e.target.value}`);
+                                  document.body.removeChild(colorPicker);
+                                };
+                              } else {
+                                console.log(`Selected color: ${color}`);
+                              }
+                            }}
+                          >
+                            {color === "custom" && "+"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div id="sizePanel" style={{ marginBottom: "15px" }}>
+                      <h4 style={{ margin: "5px 0" }}>Size</h4>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        defaultValue="16"
+                        style={{
+                          width: "100%",
+                          padding: "5px",
+                          borderRadius: "5px",
+                          border: "1px solid #ccc",
+                        }}
+                        onChange={(e) => console.log(`Selected size: ${e.target.value}`)}
+                      />
+                    </div>
+                  </>
+                );
+              default:
+                return null;
+            }
+          })()
+        ) : (
+          // Show settings based on the current tool
+          <>
+            {["draw", "arrow", "line", "text", "note", "rectangle", "circle", "triangle", "diamond", "hexagon", "oval", "trapezoid", "star", "cloud", "heart", "highlighter"].includes(tool) && (
+              <div id="colorPanel" style={{ marginBottom: "15px" }}>
+                <h4 style={{ margin: "5px 0" }}>Colors</h4>
+                <div 
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, 1fr)",
+                    gap: "10px",
+                  }}
+                >
+                  {[
+                    "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
+                    "#FF00FF", "#00FFFF", "#FFA500", "#800080",
+                    "#808080", "#000000", "#FFFFFF", "custom",
+                  ].map((color) => (
+                    <button
+                      key={color}
+                      style={{
+                        width: "30px",
+                        height: "30px",
+                        borderRadius: "50%",
+                        backgroundColor: color === "custom" ? "#ccc" : color,
+                        border: "2px solid #ccc",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => {
+                        if (color === "custom") {
+                          const colorPicker = document.createElement("input");
+                          colorPicker.type = "color";
+                          colorPicker.style.position = "absolute";
+                          colorPicker.style.opacity = "0";
+                          document.body.appendChild(colorPicker);
+                          colorPicker.click();
+                          colorPicker.oninput = (e) => {
+                            console.log(`Selected custom color: ${e.target.value}`);
+                            document.body.removeChild(colorPicker);
+                          };
+                        } else {
+                          console.log(`Selected color: ${color}`);
+                        }
+                      }}
+                    >
+                      {color === "custom" && "+"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {["draw", "arrow", "line", "text", "note", "rectangle", "circle", "triangle", "diamond", "hexagon", "oval", "trapezoid", "star", "cloud", "heart", "highlighter"].includes(tool) && (
+              <div id="sizePanel" style={{ marginBottom: "15px" }}>
+                <h4 style={{ margin: "5px 0" }}>Size</h4>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  defaultValue="16"
+                  style={{
+                    width: "100%",
+                    padding: "5px",
+                    borderRadius: "5px",
+                    border: "1px solid #ccc",
+                  }}
+                  onChange={(e) => console.log(`Selected size: ${e.target.value}`)}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
       <div
         id="zoom-div"
         style={{
@@ -1659,7 +2091,7 @@ function App() {
           boxShadow: "0 2px 5px rgba(0, 0, 0, 0.2)", // Optional styling
         }}
       > Zoom: {Math.round(scaleRef.current * 10000) / 10000}%
-    </div>
+      </div>
       <div
         id="selection-box"
         style={{
@@ -1711,7 +2143,7 @@ function App() {
             />
           </div>
         ))}
-      </div>
+        </div>
       {hoveredTool && (
         <div
           style={{
