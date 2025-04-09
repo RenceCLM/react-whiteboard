@@ -27,6 +27,7 @@ import frameIcon from "./assets/frame-icon.svg"
 import assetIcon from "./assets/asset-icon.svg"
 
 import { shapeDrawers } from "./shapes";
+import { image } from "framer-motion/client";
 
 const toolsList = {
   select: { toolName: "select", shortcut: "V", icon: selectIcon },
@@ -68,7 +69,13 @@ Object.keys(toolsList).forEach((key) => {
 
 
 function App() {
+  //CONSTANTS
+  const EDGE_MARGIN = 10; // Margin of error for detecting edge clicks
+
+
   const [_, setForceRender] = useState(0); // Dummy state to trigger re-renders
+  const stupidFuckingRefInBetweenMouseUpandDown = useRef(null)
+  const editing = useRef(null)
 
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
@@ -119,7 +126,7 @@ function App() {
     const handleKeyDown = (e) => {
       // Loop through toolsList to find a matching shortcut
       Object.values(toolsList).forEach((tool) => {
-        if (tool.shortcut && e.key.toUpperCase() === tool.shortcut.toUpperCase()) {
+        if (!(activeInput) && tool.shortcut && e.key.toUpperCase() === tool.shortcut.toUpperCase()) {
           setTool(tool.toolName); // Set the tool if the shortcut matches
         }
       });
@@ -130,7 +137,7 @@ function App() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-    }, []);
+    }, [activeInput]); // IF YOU EVER WANT TO OPTIMIZE I ONLY PUT activeInput here because useEffect only gets the initial state of activeInput FOR SOME FUCKING REASON
 
   const handleMouseEnterTool = (toolName) => {
     setHoveredTool(toolName); // Set the hovered tool name
@@ -203,7 +210,7 @@ function App() {
   
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'canvas-state.json';
+    a.download = '_canvas-state.json';
     a.click();
   
     URL.revokeObjectURL(url);
@@ -306,6 +313,7 @@ function App() {
         paths: [...pathsRef.current],
         textBoxes: [...textBoxesRef.current],
         notes: [...notesRef.current],
+        images: [...imagesRef]
       });
     }
 
@@ -705,8 +713,7 @@ function App() {
       ctx.globalAlpha = hoveredElements.includes(path) ? 0.3 : 1.0;
   
       if (path.type === "arrow") {
-        console.log("Drawing Arrow", path);
-  
+ 
         // Get the center of the fromElement and toElement, if they exist
         const fromCenter = path.fromElement ? getElementCenterById(path.fromElement) : null;
         const toCenter = path.toElement ? getElementCenterById(path.toElement) : null;
@@ -922,7 +929,6 @@ function App() {
       x >= ex && x <= ex + width && y >= ey && y <= ey + height
   );
 
-
   const handleMouseDown = (e) => {
     const { offsetX, offsetY } = getMousePos(e);
     setLastMousePos({ x: e.clientX, y: e.clientY });
@@ -932,99 +938,27 @@ function App() {
     const clickedTextBox = findElementAtPosition(textBoxesRef.current, offsetX, offsetY);
     const clickedNote = findElementAtPosition(notesRef.current, offsetX, offsetY);
     const clickedPath = null // figure out how to see if user clicked on a path
-    const box = selectedBoxRef.current;
+    const clickedSelectedBox = selectedBoxRef.current 
+      ? findElementAtPosition([selectedBoxRef.current], offsetX, offsetY) 
+      : false;
 
-  
-    const EDGE_MARGIN = 10; // Margin of error for detecting edge clicks
-  
-    if (e.button === 2) {
-      setTool("hand")
-    }
-
-    // if clicked on canvas
-    if (!(clickedImage || clickedTextBox || clickedNote || box )) {
+    // IF CLICKED ON CANVAS
+    if (!(clickedImage || clickedTextBox || clickedNote || clickedSelectedBox )) {
       selectedBoxRef.current = null
       selectedElementsRef.current = []
     }
 
-    // clears textbox editing
-    if (activeInput) {
-      handleInputBlur(null);
-      setActiveInput(null);
-      return;
-    }
 
-    console.log("There is a box?", selectedBoxRef.current)
+    // IF CLICKED ON OTHER SHIT
 
 
-    if (box) {
-      const inXRange = (val, target) => Math.abs(val - target) <= EDGE_MARGIN;
-      const inYRange = (val, target) => Math.abs(val - target) <= EDGE_MARGIN;
-  
-      const isOnLeftEdge = inXRange(offsetX, box.x);
-      const isOnRightEdge = inXRange(offsetX, box.x + box.width);
-      const isOnTopEdge = inYRange(offsetY, box.y);
-      const isOnBottomEdge = inYRange(offsetY, box.y + box.height);
-  
-      // Check if on edges and setTool "resize"
-      if (isOnLeftEdge || isOnRightEdge || isOnTopEdge || isOnBottomEdge) {
-        let direction = null;
-  
-        if (isOnLeftEdge && isOnTopEdge) direction = "top-left";
-        else if (isOnRightEdge && isOnTopEdge) direction = "top-right";
-        else if (isOnLeftEdge && isOnBottomEdge) direction = "bottom-left";
-        else if (isOnRightEdge && isOnBottomEdge) direction = "bottom-right";
-        else if (isOnTopEdge) direction = "top-middle";
-        else if (isOnBottomEdge) direction = "bottom-middle";
-        else if (isOnLeftEdge) direction = "left-middle";
-        else if (isOnRightEdge) direction = "right-middle";
-  
-        if (direction) {
-          setResizeDirection(direction); // Set which part of the box is being resized
-          setActiveTool("resizing");
-          return;
-        }
-      }
-  
-      // Check if clicked inside the box (not on edges)
-      else if (
-        offsetX >= box.x &&
-        offsetX <= box.x + box.width &&
-        offsetY >= box.y &&
-        offsetY <= box.y + box.height
-      ) {
-        setActiveTool("dragging");
-        console.log("Setting tool to dragging")
-        return;
-      }
-    }
-    
     if (clickedImage && tool !== "arrow") {
-      console.log("clickedImage and setting selectedElements")
       selectedElementsRef.current = [clickedImage] // Select the clicked image
       redrawCanvas()
       return;
     }
   
-    if (clickedTextBox && tool !=="arrow") {
-      setActiveInput((prev) => ({
-        ...prev,
-        ...clickedTextBox,
-        text: clickedTextBox.text,
-      }));
-      
-      // Make the text of the selected Textbox " " then redraw the canvas
-      textBoxesRef.current = textBoxesRef.current.map((box) =>
-        box.id === clickedTextBox.id
-          ? { ...box, text: " "}
-          : box
-      );
-
-      redrawCanvas()
-      return;
-    }
-  
-    if (clickedNote && tool !=="arrow") {
+    else if(clickedNote && tool !=="arrow") {
       setActiveInput({
         ...activeInput,
         x: clickedNote.x,
@@ -1037,11 +971,23 @@ function App() {
   
       return;
     }
+
+
+    //      see if it's dragging.    or resizing
+    if ((clickedTextBox || clickedSelectedBox) && tool !=="arrow") {
+      setActiveTool("textbox or box clicked")
+      return
+    }
   
+    // CLEARING CODE
     setSelectionBox({ left: e.clientX, top: e.clientY, width: 0, height: 0 })
     selectedElementsRef.current = [];
-  
-    
+    if (activeInput) {
+      handleInputBlur(null);
+      setActiveInput(null);
+      return;
+    }
+
     switch (tool) {
       case "hand":
         setActiveTool("hand");
@@ -1068,6 +1014,8 @@ function App() {
         findElementAtPosition(imagesRef.current, offsetX, offsetY) ||
         findElementAtPosition(textBoxesRef.current, offsetX, offsetY) ||
         findElementAtPosition(notesRef.current, offsetX, offsetY);
+
+        console.log(clickedElement)
 
         console.log("Start arrow, clicked element: ", clickedElement)
 
@@ -1185,7 +1133,56 @@ function App() {
     const { offsetX, offsetY } = getMousePos(e);
     const dx = e.clientX - lastMousePos.x;
     const dy = e.clientY - lastMousePos.y;
-  
+
+    if (activeTool === "textbox or box clicked") {      
+      const box = selectedBoxRef.current;
+      
+      if (box) {
+        const inXRange = (val, target) => Math.abs(val - target) <= EDGE_MARGIN;
+        const inYRange = (val, target) => Math.abs(val - target) <= EDGE_MARGIN;
+    
+        const isOnLeftEdge = inXRange(offsetX, box.x);
+        const isOnRightEdge = inXRange(offsetX, box.x + box.width);
+        const isOnTopEdge = inYRange(offsetY, box.y);
+        const isOnBottomEdge = inYRange(offsetY, box.y + box.height);
+    
+        // Check if on edges and setTool "resize"
+        if (isOnLeftEdge || isOnRightEdge || isOnTopEdge || isOnBottomEdge) {
+          let direction = null;
+    
+          if (isOnLeftEdge && isOnTopEdge) direction = "top-left";
+          else if (isOnRightEdge && isOnTopEdge) direction = "top-right";
+          else if (isOnLeftEdge && isOnBottomEdge) direction = "bottom-left";
+          else if (isOnRightEdge && isOnBottomEdge) direction = "bottom-right";
+          else if (isOnTopEdge) direction = "top-middle";
+          else if (isOnBottomEdge) direction = "bottom-middle";
+          else if (isOnLeftEdge) direction = "left-middle";
+          else if (isOnRightEdge) direction = "right-middle";
+    
+          if (direction) {
+            setResizeDirection(direction); // Set which part of the box is being resized
+            setActiveTool("resizing");
+          }
+        }
+    
+        // Check if clicked inside the box (not on edges)
+        else if (
+          offsetX >= box.x &&
+          offsetX <= box.x + box.width &&
+          offsetY >= box.y &&
+          offsetY <= box.y + box.height
+        ) {
+          setActiveTool("dragging");
+          return;
+        }
+      }
+    }
+
+    // HANDLE DRAGGING TOOL
+    if (e.button === 2) {
+      setTool("hand")
+    }
+
     switch (activeTool) {
       case "dragging": {
         const adjustedDx = dx / scaleRef.current;
@@ -1256,6 +1253,7 @@ function App() {
         });
   
         redrawCanvas();
+        setTool(null)
         break;
       }
   
@@ -1396,6 +1394,35 @@ function App() {
   const handleMouseUp = (e) => {
     setSelectionBox({ left: 0, top: 0, width: 0, height: 0 })
 
+    const { offsetX, offsetY } = getMousePos(e);
+    const clickedTextBox = findElementAtPosition(textBoxesRef.current, offsetX, offsetY);
+    const noDrag = (activeTool !== "dragging" && activeTool !== "resizing" && activeTool !== "select") // THIS HAS TO SOMEHOW KNOW IF THE MOUSE WAS DRAGGED OR NOT
+    const notDrawingArrow = (activeTool !=="arrow")
+    const clickedSelectedTextBox = (selectedElementsRef.current.length === 1 &&  selectedElementsRef.current[0].id === clickedTextBox.id)
+
+    if (clickedTextBox && clickedSelectedTextBox && notDrawingArrow && noDrag) {
+      setActiveInput((prev) => ({
+        ...prev,
+        ...clickedTextBox,
+        text: clickedTextBox.text,
+      }));
+      editing.current = true
+      
+      // Make the text of the selected Textbox " " then redraw the canvas
+      textBoxesRef.current = textBoxesRef.current.map((box) =>
+        box.id === clickedTextBox.id
+          ? { ...box, text: " "}
+          : box
+      );
+
+      selectedElementsRef.current = []
+
+      redrawCanvas()
+    } else if(clickedTextBox && notDrawingArrow && !(selectedElementsRef.current.length === 1 &&  selectedElementsRef.current[0].id === clickedTextBox.id)) {
+      selectedElementsRef.current = [clickedTextBox]; // Select the clicked textbox
+      redrawCanvas();
+    }
+
     switch (activeTool) {
       case "note":
       case "dragging":
@@ -1492,6 +1519,8 @@ function App() {
           y: startTextBox.y,
           width: width,
           height: height,
+          font: "Arial",
+          fontSize: 16,
           text: "",
           id: Date.now()
         });
@@ -1513,8 +1542,7 @@ function App() {
 
   setActiveTool(null);
 
-  }
-
+  }  
 
   const handleWheel = (e) => {
     // e.preventDefault();
@@ -1588,7 +1616,6 @@ function App() {
         ? { ...textbox, text: " ",  height: newHeight, width: newWidth } // Update the textbox with new dimensions, also text " " to remove flavor text
         : textbox
     );
-  
     redrawCanvas();
   };
 
@@ -1601,7 +1628,6 @@ function App() {
           : box
       );
       textBoxesRef.current = updatedBoxes;
-      // setActiveInput(null);
 
       const updatedNotes = notesRef.current.map((note) =>
         note.id === activeInput.id
@@ -1616,6 +1642,9 @@ function App() {
 
   return (
     <div id="main-div">
+      {/* <button onClick={
+      (e)=>{console.log(activeInput)}
+      }>activeinput </button> */}
       <canvas
         ref={canvasRef}
         id="whiteboard-canvas"
@@ -1630,9 +1659,9 @@ function App() {
         onContextMenu={(e) => {e.preventDefault()}}
         onWheel={handleWheel}
       />
-       {activeInput && (
+      {activeInput && (
         <textarea
-          value={activeInput.text}
+          value={activeInput.text || ""}
           onChange={handleInputChange}
           style={{
             position: "absolute",
@@ -1640,7 +1669,9 @@ function App() {
             top: `${activeInput.y * scaleRef.current + translationRef.current.y + canvasRef.current.getBoundingClientRect().top + borderWidth}px`,
             width: `${activeInput.width * scaleRef.current}px`,
             height: `${activeInput.height * scaleRef.current}px`,
-            font: `${15 * scaleRef.current}px Arial`,
+            fontSize: `${activeInput.fontSize * scaleRef.current}px`, // Use fontSize
+            fontFamily: activeInput.font, // Use fontFamily
+            lineHeight: "1.2", // Keep lineHeight separate
             padding: "4px",
             border: "1px solid blue",
             zIndex: 10,
@@ -1648,7 +1679,6 @@ function App() {
             outline: "none",
             resize: "none",
             whiteSpace: "pre-wrap",
-            lineHeight: "1.2",
             boxSizing: "border-box",
           }}
           autoFocus
@@ -1667,10 +1697,11 @@ function App() {
           width: "200px",
         }}
       >
-        {selectedElementsRef.current.length === 1 ? (
+        {selectedElementsRef.current.length === 1 || activeInput ? (
           // Show settings for the selected element
           (() => {
-            const selectedElement = selectedElementsRef.current[0];
+            const selectedElement = activeInput || selectedElementsRef.current[0]
+
             switch (selectedElement.type) {
               case "text":
                 return (
@@ -1794,7 +1825,7 @@ function App() {
                     <div id="fontPanel" style={{ marginBottom: "15px" }}>
                       <h4 style={{ margin: "5px 0" }}>Font</h4>
                       <select
-                        value={selectedElement.font} // Show the current font
+                        value={selectedElement.font || ""} // Show the current font
                         style={{
                           width: "100%",
                           padding: "5px",
@@ -1817,6 +1848,11 @@ function App() {
                               ? { ...element, font: newFont }
                               : element
                           );
+
+                          setActiveInput((prev)=>({
+                            ...prev, 
+                            fontSize: newFontSize,
+                          }))
               
                           // Trigger a re-render
                           setForceRender((prev) => prev + 1);
@@ -1847,7 +1883,7 @@ function App() {
                       <h4 style={{ margin: "5px 0" }}>Font Size</h4>
                       <input
                         type="number"
-                        value={selectedElement.fontSize} // Show the current font size
+                        value={selectedElement.fontSize || ""} // Show the current font size || "" prevents it from being null
                         min="1"
                         max="10000"
                         style={{
@@ -1872,10 +1908,20 @@ function App() {
                               ? { ...element, fontSize: newFontSize }
                               : element
                           );
+
+                          if (activeInput) {
+                            console.log(activeInput)
+                            setActiveInput((prev)=>({
+                              ...prev, 
+                              fontSize: newFontSize,
+                            }))
+                          }
               
                           // Trigger a re-render
                           setForceRender((prev) => prev + 1);
                           redrawCanvas();
+
+                          console.log(selectedElementsRef.current[0 ])
                         }}
                       />
                     </div>
